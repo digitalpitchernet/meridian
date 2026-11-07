@@ -45,6 +45,11 @@ async function call(who, method, path, body, extra = {}) {
 const rest = (who, method, path, body, extra) => call(who, method, '/rest/v1/' + path, body, { Prefer: 'return=representation', ...extra });
 const rpc = (who, fn, args) => call(who, 'POST', '/rest/v1/rpc/' + fn, args);
 
+// process.exit() with a pooled fetch socket open aborts Node 24 on Windows (exit 127), so stop() throws instead
+const STOP = Symbol('stop');
+process.on('uncaughtException', e => { if (e !== STOP) { console.error(e); process.exitCode = 1; } });
+const stop = code => { process.exitCode = code; throw STOP; };
+
 const results = [];
 function record(id, desc, ok, expected, actual) {
   results.push({ test_id: id, description: desc, status: ok ? 'PASS' : 'FAIL', expected, actual });
@@ -55,28 +60,30 @@ const denied = r => r.status === 401 || r.status === 403 || (r.json && r.json.co
 const emptyOrDenied = r => denied(r) || (r.status === 200 && Array.isArray(r.json) && r.json.length === 0);
 
 // ---- auth setup ----
+const keyCheck = await call('anon', 'GET', '/auth/v1/settings');
+if (keyCheck.status !== 200) { console.error(`SUPABASE_ANON_KEY is not accepted by ${URL_} (${brief(keyCheck)}): use this project's publishable key`); stop(1); }
 const listed = await call('service', 'GET', '/auth/v1/admin/users?page=1&per_page=1000');
 for (const u of Object.values(USERS)) u.id = listed.json?.users?.find(x => x.email === u.email)?.id;
-if (Object.values(USERS).some(u => !u.id)) { console.error(`test users missing (admin list ${listed.status}): run tests/http/provision-users.mjs first`); process.exit(1); }
+if (Object.values(USERS).some(u => !u.id)) { console.error(`test users missing (admin list ${listed.status}): run tests/http/provision-users.mjs first`); stop(1); }
 const tokens = {};
 for (const [k, u] of Object.entries(USERS)) {
   const pw = randomBytes(24).toString('base64url');
   const up = await call('service', 'PUT', `/auth/v1/admin/users/${u.id}`, { password: pw, email_confirm: true });
   const si = await call('anon', 'POST', '/auth/v1/token?grant_type=password', { email: u.email, password: pw });
   tokens[k] = si.json?.access_token;
-  record(`H-AUTH-0${Object.keys(tokens).length}`, `user ${k} signs in through GoTrue`, up.status === 200 && !!tokens[k], '200 + token', `${up.status}/${si.status}`);
+  record(`H-AUTH-0${Object.keys(tokens).length}`, `user ${k} signs in through GoTrue`, up.status === 200 && !!tokens[k], '200 + token', `${up.status}/${si.status}${si.status === 200 ? '' : ' ' + brief(si)}`);
 }
 if (AUTH_ONLY || !tokens.a || !tokens.b) {
   mkdirSync(join(repo, 'evidence'), { recursive: true });
   writeFileSync(join(repo, 'evidence', 'http-auth-results.json'), JSON.stringify({ suite: 'http-auth', project: URL_, ran_at: new Date().toISOString(), results }, null, 2) + '\n');
   const bad = results.some(x => x.status === 'FAIL');
   console.log(bad ? 'sign-in failed; stopping' : 'auth checks done (--auth-only)');
-  process.exit(bad ? 1 : 0);
+  stop(bad ? 1 : 0);
 }
 const owned = async u => (await rest('service', 'GET', `businesses?select=id&created_by_user_id=eq.${u}`)).json?.[0]?.id;
 BIZ_A = await owned(USERS.a.id); BIZ_B = await owned(USERS.b.id);
 ACCT_A = (await rest('service', 'GET', `financial_accounts?select=id&business_id=eq.${BIZ_A}&name=eq.${encodeURIComponent('Bridge escrow-free account')}`)).json?.[0]?.id;
-if (!BIZ_A || !BIZ_B || !ACCT_A) { console.error('fixtures missing: run tests/sql 00, 01 and 21 part 1 first'); process.exit(1); }
+if (!BIZ_A || !BIZ_B || !ACCT_A) { console.error('fixtures missing: run tests/sql 00, 01 and 21 part 1 first'); stop(1); }
 
 // ---- anon ----
 record('H-ANON-01', 'anon cannot read businesses', emptyOrDenied(await rest('anon', 'GET', 'businesses?select=id')), 'denied or []', brief(await rest('anon', 'GET', 'businesses?select=id')));
@@ -197,4 +204,4 @@ const summary = results.reduce((m, x) => (m[x.status] = (m[x.status] || 0) + 1, 
 mkdirSync(join(repo, 'evidence'), { recursive: true });
 writeFileSync(join(repo, 'evidence', 'http-results.json'), JSON.stringify({ suite: 'http', run: RUN, project: URL_, node: process.version, ran_at: new Date().toISOString(), summary, results }, null, 2) + '\n');
 console.log(JSON.stringify(summary));
-process.exit(summary.FAIL ? 1 : 0);
+process.exitCode = summary.FAIL ? 1 : 0;
