@@ -1,0 +1,28 @@
+{
+  "suite": "http-auth",
+  "project": "https://xwopffsacsctvjjwnxnw.supabase.co",
+  "ran_at": "2026-11-07T22:55:17.781Z",
+  "results": [
+    {
+      "test_id": "H-AUTH-01",
+      "description": "user a signs in through GoTrue",
+      "status": "PASS",
+      "expected": "200 + token",
+      "actual": "200/200"
+    },
+    {
+      "test_id": "H-AUTH-02",
+      "description": "user b signs in through GoTrue",
+      "status": "PASS",
+      "expected": "200 + token",
+      "actual": "200/200"
+    },
+    {
+      "test_id": "H-AUTH-03",
+      "description": "user c signs in through GoTrue",
+      "status": "PASS",
+      "expected": "200 + token",
+      "actual": "200/200"
+    }
+  ]
+}
