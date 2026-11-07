@@ -1,7 +1,7 @@
-# Meridian Gate 1 Recovery Drill: Runbook (revision 2, for review, not yet executed)
+# Meridian Gate 1 Recovery Drill: Runbook (revision 3, for review, not yet executed)
 
-Status: **revision 2 for independent review, 8 Nov 2026.** It includes the reviewer's six refinements and amendments
-A1–A6 as implemented. Changes from revision 1 are in `docs/RECOVERY-RUNBOOK-CHANGES.md`. Nothing has been run. The
+Status: **revision 3 for independent review, 8 Nov 2026.** It covers the reviewer's six implementation corrections on
+top of revision 2. Changes are in `docs/RECOVERY-RUNBOOK-CHANGES.md`. Nothing has been run. The
 recovery target does not exist. The nine migrations, both validation projects and Gate 2 are untouched. **D1 (source
 sentinel write) is not approved.**
 
@@ -11,12 +11,18 @@ either proven exact, classified as platform-generated with a stated reason, or f
 
 | File | Role |
 |---|---|
-| `tests/recovery/drill.mjs` | runs R-01 … R-16, writes `evidence/recovery-drill.json` |
+| `tests/recovery/drill.mjs` | runs R-00 … R-16, writes `evidence/recovery-drill.json` (fsync'd at each critical point) |
+| `tests/recovery/approved-migrations.sha256` | the approved manifest: the 9 migration files and their sha256 |
+| `tests/recovery/migrations.mjs` (+ `.test.mjs`) | R-00: exactly the 9 approved files, byte for byte |
+| `tests/recovery/accepted-platform-versions.json` | reviewed GoTrue/Storage version differences (empty: none accepted) |
 | `tests/recovery/platform-schema.sql` | A1: full definitions of `auth.users`, `auth.identities`, `storage.objects` |
 | `tests/recovery/reconcile.sql` | fingerprint: tables, full Auth rows, every Storage object field, finance as exact text, security posture |
-| `tests/recovery/compare.mjs` | diff and classification (exact / platform_generated / platform_version / unexpected) |
-| `tests/recovery/compare.test.mjs` | self-test of the classification rules |
+| `tests/recovery/compare.mjs` (+ `.test.mjs`) | diff and classification (exact / platform_generated / platform_version / unexpected) |
+| `tests/recovery/paths.mjs` (+ `.test.mjs`) | Storage URL path encoding, per segment, separators kept |
 | `tests/recovery/orphans.sql` | A4: 84 public foreign keys + `auth.identities.user_id → auth.users.id` |
+
+Self-tests (no network, no credentials): `node tests/recovery/compare.test.mjs`, `node tests/recovery/migrations.test.mjs`,
+`node tests/recovery/paths.test.mjs`.
 
 | | Source | Target |
 |---|---|---|
@@ -70,7 +76,7 @@ URI shape: `postgresql://postgres.<ref>:<password>@aws-<n>-ap-south-1.pooler.sup
 | P-1 | Gavin (MCP) | Source snapshot: 9 migrations, 30 public tables, 4 users / 4 identities, 3 index-only storage rows, 0 integration connections, 0 Vault secrets, `orphans.sql` 85 checks / 0 orphans | matches (all verified 8 Nov 2026) |
 | P-2 | Founder | Create the target (D3); fill `.env` (§1) | |
 | P-3 | Gavin (MCP) | Target empty: 0 public tables, 0 objects, 0 users, 0 buckets; Postgres 17.x | all zero |
-| P-4 | Gavin (MCP) | `platform-schema.sql` on both; identical `tables` section (the drill repeats this as R-01a) | identical |
+| P-4 | Gavin (MCP) | `platform-schema.sql` on both: identical `tables` section (the drill repeats this as R-01a), and compare `platform_versions` (R-01b). The target is created later than the source, so Supabase may have updated GoTrue or Storage in between. If so, the difference is identified and reviewed **before** the run (§4 step 2) | identical, or reviewed and accepted |
 | P-5 | Founder | Dry-run read of the source in your own terminal: `& "C:\Program Files\PostgreSQL\17\bin\pg_dump.exe" "<SOURCE_DB_URL>" --data-only -t auth.users -f tests\recovery\.work\dryrun.sql`, then delete the file | exit 0, non-empty |
 
 ---
@@ -101,14 +107,24 @@ deleted after the drill (§8 step 9).
 
 ## 4. Restore into the empty target (item 2)
 
+0. **R-00** (local, before anything else). `supabase/migrations/` must contain **exactly** the 9 files listed in the committed
+   `tests/recovery/approved-migrations.sha256`, each with the listed sha256. A missing, extra, renamed or changed file, or
+   a manifest that is not exactly 9 well-formed, unique lines, stops the drill with nothing written. The 9 file names and
+   hashes go into `evidence.migrations`. The manifest was generated on 8 Nov 2026 from the files last changed in commit
+   `d1b884e`; their MD5s equal the statements applied on `xwopffsacsctvjjwnxnw`.
 1. **R-01** stop unless the target has 0 public tables, 0 objects, 0 Auth users, 0 buckets.
 2. **R-01a (A1)** before any write, `platform-schema.sql` on both projects. For `auth.users`, `auth.identities` and
    `storage.objects` it compares, per column, the type with modifiers, nullability, the default or generation
    expression, identity, generated flag and collation, plus every constraint, index and trigger definition. Any
-   difference stops the drill with nothing written. GoTrue and Storage migration levels are recorded; if they differ
-   while every definition is identical, that is recorded as a `platform_version` difference with its reason, not ignored.
-3. **R-02** apply `supabase/migrations/*.sql` in filename order with psql, each in its own transaction with
-   `ON_ERROR_STOP`, recording each version. From here the evidence marks the target **dirty** (A6).
+   difference stops the drill with nothing written.
+   **R-01b** GoTrue and Storage migration levels must be identical. If they differ, the drill **stops with nothing
+   written**, even when every definition matches, unless `tests/recovery/accepted-platform-versions.json` contains an
+   entry for exactly that source/target version pair with a reason, a reviewer and a date. An entry is added only after
+   the difference has been identified (what changed between the versions) and explicitly reviewed. It is committed, so
+   the acceptance is in git history, and it is copied into `evidence.differences.platform_version`. The file is empty today.
+3. **R-02** apply the migrations in filename order with psql, each in its own transaction with `ON_ERROR_STOP`,
+   recording each version. The **bytes verified in R-00 are piped to psql**, so a file cannot change between the check
+   and the apply. From here the evidence marks the target **dirty** (A6), and that state is written to disk first.
 4. **R-05** restore in **one transaction**:
    ```
    SET session_replication_role = replica;
@@ -134,9 +150,16 @@ deleted after the drill (§8 step 9).
 - **R-16, intentional deviation.** To prove a restored user can sign in, the drill sets a **new random password on one
   restored user on the target** (the lowest user id) through the target Admin API, then signs in with the target
   publishable key. This changes that user's `encrypted_password`, `updated_at` and `last_sign_in_at`, and adds session
-  and audit rows on the target only. It is recorded in `evidence.intentional_deviations` **before** the change is made,
-  with the user, fields, reason and time. All fingerprints are taken **before** R-16, so the comparison is unaffected.
-  R-15 and R-16 do not run if any earlier step failed, so a failed target stays as it was for diagnosis.
+  and audit rows on the target only. The sequence:
+  1. the deviation record (user, fields, reason, `state: recorded, not yet applied`) is written to
+     `evidence/recovery-drill.json` and **fsync'd** (temp file + rename) **before** the API call;
+  2. the password-reset outcome (`password_reset`: time, HTTP status, returned user id; `state`) is recorded and flushed;
+  3. the sign-in outcome (`sign_in`: time, status, token issued, `returned_user_id`, `token_sub`, `same_user`, error
+     code) is recorded and flushed.
+  R-16 passes only if the reset returned the selected id, the sign-in issued a token, and **both** the `user.id` in the
+  sign-in response and the token's `sub` equal the selected restored user's id. A crash at any point leaves the deviation
+  on disk. All fingerprints are taken **before** R-16, so the comparison is unaffected. R-15 and R-16 do not run if any
+  earlier step failed, so a failed target stays as it was for diagnosis.
 - Nothing is written to Auth tables outside the single restore transaction and R-16. No Auth schema object is changed.
 
 ---
@@ -148,6 +171,9 @@ deleted after the drill (§8 step 9).
 | Index rows (`storage.objects`, all 15 columns) | the dump | restored in R-05 |
 | File bytes | source Storage | R-06: GET with the source secret key; POST to the same path on the target with the target secret key, the **source's mimetype and Cache-Control**, `x-upsert: true` (the row already exists); GET back and compare sha256 |
 
+- URLs: bucket and object name are percent-encoded **per segment**, keeping `/` (`paths.mjs`). Spaces, Unicode and
+  reserved characters (`# ? % & = + : @ ; , \ [ ]`) cannot turn into a query, fragment or different path. Empty, `.` and
+  `..` segments are refused. This applies to the R-03 upload and every R-06 read, upload and read-back.
 - A row is treated as index-only only if its source `metadata` is NULL **and** Storage answers 400 not-found. Today
   that is the 3 SQL-test rows. Any other read failure fails R-06.
 - **R-10** compares every column of every object, keyed by bucket/name: id, owner, owner_id, created_at, updated_at,
@@ -184,10 +210,12 @@ Result vocabulary in `evidence/recovery-drill.json`:
 
 | Area | Step | Compared | Pass |
 |---|---|---|---|
+| Migration files | R-00 | exactly 9 files; sha256 equal to the approved manifest | identical; hashes in evidence |
 | Target clean | R-01 | public tables, objects, users, buckets | all 0 |
 | Platform tables | R-01a | full definitions of `auth.users`, `auth.identities`, `storage.objects` | identical |
-| Schema | R-02, R-07 | 9 files applied; version list | identical |
-| Schema posture | R-12 | table and column grants, policies (public + storage), RLS tables, function ACLs + DEFINER flags, triggers (not `qa`), bucket | identical |
+| Platform versions | R-01b | GoTrue and Storage migration levels | identical, or a reviewed entry in `accepted-platform-versions.json` |
+| Schema | R-02, R-07 | 9 verified files applied; version list | identical |
+| Security posture | R-12 | see below | identical |
 | Every record | R-08 | 30 public tables: row count + md5 of full rows | identical |
 | Financial | R-11 | per business: available cash, every account balance (as of 2100-01-01), live transaction sum, all as `numeric(15,2)` **text**; reversed count | identical |
 | Allocations | R-08, R-11 | `payment_allocations` rows; live allocation sum (text) | identical |
@@ -200,6 +228,25 @@ Result vocabulary in `evidence/recovery-drill.json`:
 | Overall | R-13 | all areas | 0 unexpected |
 | Integrity | R-14 | `orphans.sql` on the target | 85 checks, 0 orphans |
 | Auth usable | R-15, R-16 | GoTrue lists the same ids, all confirmed; one user signs in | 200 + token; deviation recorded |
+
+**R-12 security posture** (`reconcile.sql` → `security`), every item compared exactly:
+
+| Item | Content |
+|---|---|
+| `relation_acl` | every table, view, sequence in `public`: kind, owner, full ACL, **including PUBLIC (`=…`) entries** (36 today) |
+| `column_acl` | every column-level grant in `public` (196) |
+| `rls` | per table: RLS enabled **and FORCE RLS** (30, all forced today) |
+| `view_options` | `reloptions` of every view, e.g. `security_invoker=true` (6) |
+| `schema_acl` | owner and ACL of schemas `public` and `storage`, including PUBLIC usage |
+| `default_acl` | default privileges for future objects: global and `public`, every role (7 entries, including migration 8's global PUBLIC EXECUTE revoke) |
+| `policies` | public and storage: permissive/restrictive, roles, command, USING, WITH CHECK (31) |
+| `functions` | every `public` function: md5 of `pg_get_functiondef` (body, language, SECURITY DEFINER, `SET search_path`), plus security_definer, config, volatility, leakproof, owner, ACL (27) |
+| `triggers` | every non-internal trigger outside `qa`: enabled state + md5 of its definition (67) |
+| `buckets` | the complete `storage.buckets` row (public, size limit, MIME types, type, versioning, lifecycle, owner, …) |
+
+Deliberate exclusions, which are not compared: functions, grants and ACLs inside `auth`, `storage`, `extensions` and other
+Supabase-owned schemas (platform-managed; the three tables the restore writes are covered by R-01a); the `qa` test
+schema (never restored); bucket `created_at` and `updated_at` (set when migration 6 runs on each project).
 
 Gavin's read-only follow-up on the target via MCP: `orphans.sql` again; the security advisor (expected 0008 ×1 INFO,
 0029 ×8 WARN, leaked-password ×1 WARN, no 0011 because `qa` is not restored); `qa` absent.
@@ -241,7 +288,11 @@ or write to either validation project.
 | A5 | `--allow-source-sentinel`; without it R-03 is SKIPPED and the result cannot be PASS |
 | A6 | `target_state` in the evidence and output: `dirty: recreate the target before any re-run` from R-02 onwards |
 
-Also changed: money in the fingerprint is compared as exact text (a scale difference such as `1500.0` versus
+Revision 3 corrections: R-00 migration manifest; R-01b reviewed-only version differences; R-12 extended; per-segment
+path encoding; R-16 deviation flushed to disk before the change, outcomes recorded separately, signed-in identity
+verified. See the change report.
+
+Also changed in revision 2: money in the fingerprint is compared as exact text (a scale difference such as `1500.0` versus
 `1500.00` would previously have been hidden by `JSON.parse`); Auth rows are compared in full, not ids and emails only;
 reconciliation steps R-07…R-14 all run and report before the drill stops, so one failure does not hide another.
 
@@ -254,7 +305,9 @@ record; recreate the target". The target is never repaired by hand.
 
 | Fails at | State left | Source written? | Action |
 |---|---|---|---|
+| R-00 | nothing written anywhere | no | the repository or manifest disagrees with the approved migrations: stop and report; never edit the manifest to make it pass |
 | R-01 / R-01a | nothing written | no | new empty target; for R-01a, report the definition difference, which is a platform finding |
+| R-01b | nothing written | no | identify what changed between the GoTrue/Storage versions; review; only then add an accepted entry and re-run against the same (still empty) target |
 | R-02 | target partly migrated (each file all-or-nothing) | no | record the file and error; recreate the target. A migration defect is fixed only by a **new** forward migration, with approval |
 | R-03 | target migrated | no (upload failed) | check the source key; recreate the target; re-run |
 | R-04 | target migrated; sentinel present if D1 | sentinel only | fix the connection or version; recreate the target |
@@ -268,7 +321,7 @@ time, press Ctrl+C; the target is disposable; then delete `tests/recovery/.work`
 
 **Cutover:** none in this drill. The source stays the system of record and nothing is pointed at the target. For a real recovery later:
 1. freeze writes on the source and take the final backup (the recovery point);
-2. run R-01…R-16 against the new project, requiring `PASS_EXACT` or `PASS_WITH_CLASSIFIED_DIFFERENCES` with each difference accepted;
+2. run R-00…R-16 against the new project, requiring `PASS_EXACT` or `PASS_WITH_CLASSIFIED_DIFFERENCES` with each difference accepted;
 3. re-enter Vault and integration secrets, redeploy Edge Functions and their secrets, re-point connector keys;
 4. switch the app's `SUPABASE_URL` and publishable key; users sign in again;
 5. smoke test: sign-in, own business, available cash equal to R-11, one Vault download;

@@ -1,61 +1,54 @@
-# Recovery runbook: change report, revision 1 → 2 (8 Nov 2026)
+# Recovery runbook: change report
 
-For independent review. Nothing was executed: no target project, no drill run, no write to either validation
-project, migrations unchanged, Gate 2 not started. D1 (source sentinel) remains **not approved** and is enforced by the script.
+For independent review. Nothing was executed in either round: no target project, no drill run, no write to either
+validation project, no D1, migrations unchanged, Gate 2 paused.
 
-## Reviewer refinements
+## Revision 2 → 3 (8 Nov 2026): implementation corrections
 
-| # | Requested | Done | Where |
+| # | Issue | How it is addressed | Where |
 |---|---|---|---|
-| 1 | A1 must compare definitions, not names | Per column: type with modifiers, NOT NULL, default or generation expression, identity, generated flag, collation. Plus every constraint, index and trigger definition. For `auth.users` (35 columns), `auth.identities` (9), `storage.objects` (15). Stops before any write | `platform-schema.sql`, drill R-01a |
-| 2 | Check `auth.identities.user_id → auth.users.id` explicitly | Added as an 85th check next to the 84 public foreign keys | `orphans.sql`, drill R-14 |
-| 3 | Storage reconciliation: ids, owner, size, MIME, eTag, metadata; classify API-changed fields | Every column of every object compared individually. Only `updated_at`, `last_accessed_at`, `version` and `metadata.lastModified` may differ, and only on objects R-06 re-uploaded. id, owner, owner_id, size, mimetype, eTag, cacheControl and the rest must be exact. Re-uploads now send the source's mimetype and Cache-Control | `reconcile.sql`, `compare.mjs`, drill R-06/R-10, runbook §6 |
-| 4 | Distinguish exact from acceptable platform differences; ignore nothing | Every difference is put in one of three lists in the evidence: `platform_generated` (with reason), `platform_version` (with reason), `unexpected` (fails). Results: `PASS_EXACT`, `PASS_WITH_CLASSIFIED_DIFFERENCES`, `INCOMPLETE`, `FAIL` | `compare.mjs`, drill `finish()`, runbook §7 |
-| 5 | Document A2's password change and record it in the evidence | R-16 writes `intentional_deviations` (user, fields, reason, time, target-only) **before** changing anything. Fingerprints are taken before R-16. R-15/R-16 are skipped if anything earlier failed | drill R-16, runbook §5 |
-| 6 | Provide the scripts, not only the runbook | Files below | |
+| 1 | R-16 deviation record only in memory | `persist()` writes `evidence/recovery-drill.json` through a temp file, `fsync` and rename. R-16 persists the deviation (`state: recorded, not yet applied`) **before** the password API call, then persists `password_reset` (time, status, returned id, state), then `sign_in` (time, status, token issued, ids, error), each separately. The target-dirty state is also persisted before R-02 | `drill.mjs` `persist()`, R-02, R-16; runbook §5 |
+| 2 | Migration integrity | New committed manifest `tests/recovery/approved-migrations.sha256` (9 lines). **R-00** runs first, locally: exactly 9 `.sql` files, exactly the 9 listed, each sha256 equal, manifest well-formed with no duplicates; otherwise it stops with nothing written. Hashes go into `evidence.migrations`. The verified bytes are **piped** to psql, so the applied file is the hashed file | `migrations.mjs` + `migrations.test.mjs`, `drill.mjs` R-00/R-02; runbook §4 |
+| 3 | R-12 too narrow | Now compares: relation ACLs with owner and **PUBLIC** entries; column ACLs; RLS enabled **and FORCE**; view `reloptions` (`security_invoker`); `public`/`storage` schema ACLs; default privileges (global + `public`, all roles); policies with permissive and roles; every `public` function's full definition md5 plus DEFINER, config, volatility, leakproof, owner, ACL; trigger definitions; the complete bucket row. Exclusions documented: platform schemas' internals, `qa`, bucket timestamps | `reconcile.sql` `security`; runbook §7 |
+| 4 | Storage path encoding | `storagePath(bucket, name)`: each segment `encodeURIComponent`'d, `/` kept; empty, `.` and `..` segments refused. Used for the R-03 upload and every R-06 read, upload and read-back. R-06 now reads bucket and name as separate columns. Tests: spaces, NFC é, Devanagari, emoji, `# ? % & = + : @ ; , \ [ ]`, a literal `%2F`, bucket encoding, round trip, unsafe segments | `paths.mjs` + `paths.test.mjs`; `drill.mjs` R-03/R-06 |
+| 5 | R-16 identity | Passes only if the reset response id, the sign-in response `user.id` **and** the access token's `sub` all equal the selected restored user's id. All three are recorded | `drill.mjs` R-16 |
+| 6 | Platform versions auto-accepted | **R-01b** is separate from R-01a and stops (nothing written) on any GoTrue/Storage version difference, unless `tests/recovery/accepted-platform-versions.json` has an entry for exactly that pair with a reason, a reviewer and a date. The file is committed and empty. Accepted entries are copied into the evidence | `drill.mjs` R-01b; runbook §4, §10 |
 
-## Files changed
+Also found and fixed in this round: `ORDER BY 1` inside the fingerprint's aggregates sorted by a constant. Key order
+doesn't affect the comparison (the diff walks keys by name), but the orders are now real, so `fingerprints.json` is deterministic.
 
-| File | Change |
-|---|---|
-| `tests/recovery/drill.mjs` | rewritten: R-01a, R-03 gated by `--allow-source-sentinel`, stricter R-06, classified R-07…R-13 that all report before stopping, R-14, R-15, R-16, `target_state`, result vocabulary, clean exit on Windows |
-| `tests/recovery/platform-schema.sql` | new (A1) |
-| `tests/recovery/reconcile.sql` | full-row Auth fingerprints; per-object Storage fields; money as `numeric(15,2)` text |
-| `tests/recovery/compare.mjs` | new: diff and classification |
-| `tests/recovery/compare.test.mjs` | new: 7 groups of assertions |
-| `tests/recovery/orphans.sql` | `auth.identities` check added |
-| `docs/RECOVERY-RUNBOOK.md` | revision 2 |
+Expected consequence: the target is created after the source, so a GoTrue or Storage update in between is plausible.
+P-4 compares the versions read-only before the run, so any difference is reviewed beforehand rather than stopping the drill.
 
-## Additional issues found during this revision
-
-1. **Money scale could be hidden.** `JSON.parse` turned `"1500.00"` into `1500` in the fingerprint, the same trap as
-   HTTP H-FIN-06. Revision 1's claim that money was compared as text was therefore wrong. Now every amount is emitted as text.
-2. **Exit code on Windows.** `process.exit()` with an open fetch socket aborts Node 24 on Windows (exit 127). The
-   drill now exits through `process.exitCode`, as `run.mjs` and `provision-users.mjs` already do.
-3. **The previous Auth check only covered ids and emails.** Now full rows.
-4. **Index-only versus failed read.** Revision 1 treated any failed source read as index-only. Now only a NULL-metadata
-   row with a 400 not-found counts; anything else fails R-06.
-5. **R-06 reads may touch the source.** Storage may update `last_accessed_at` when an object is read. Documented. It
-   cannot happen without D1, because there is nothing to read.
-
-## Verification done (read-only, source only)
+### Verification in this round
 
 | Check | Result |
 |---|---|
-| `platform-schema.sql` on the source | ran; 35 / 9 / 15 columns; constraints, indexes and triggers captured; generated `confirmed_at` and `path_tokens` reported correctly |
-| `orphans.sql` on the source | 85 checks, 0 orphans |
-| `orphans.sql` detection | a deliberately orphaned composite-key temp-table row was counted, the NULL-key row ignored (rolled back, nothing left) |
-| `reconcile.sql` on the source | ran; 30 tables, 9 migrations, 4 users / 4 identities as full-row md5, 3 objects field by field, amounts as text (`"1500.00"`) |
-| `compare.test.mjs` | all assertions pass |
+| `node tests/recovery/migrations.test.mjs` | passes: repository matches the manifest; changed byte, missing file, extra file, 8-line manifest, duplicate line, malformed line all caught; CRLF manifest accepted |
+| `node tests/recovery/paths.test.mjs` | passes |
+| `node tests/recovery/compare.test.mjs` | passes (unchanged rules) |
+| extended R-12 `security` block on the source (read-only, MCP) | runs; 36 relation ACLs, 196 column ACLs, 30 tables all RLS-forced, 6 views, 2 schema ACLs, 7 default-ACL entries, 31 policies, 27 functions, 67 triggers, 1 bucket |
+| manifest vs git | the 9 files are unchanged since `d1b884e`; their MD5s equal those verified on `xwopffsacsctvjjwnxnw` |
 | `drill.mjs` | syntax check only |
 
-## Not verified
+### Still not verified
 
-`drill.mjs` has **not been run end to end**. That needs the target and your credentials. In particular, these are
-unproven until the run:
-- the psql and pg_dump calls against the pooler;
-- the Storage upsert behaviour on a restored row (whether `id` and `owner_id` survive, which R-10 will report);
-- the R-15/R-16 Auth calls on the target.
+The end-to-end drill: psql and pg_dump against the pooler, psql reading migrations from stdin with `-f -`, Storage
+upsert behaviour on a restored row, and the target Auth calls. `persist()` and the R-16 ordering are verified by
+reading the code, not by an automated test.
 
-The `auth.identities` orphan row is a plain `NOT EXISTS` and was not separately tested against a deliberate orphan,
-because the real Auth tables must not be altered.
+---
+
+## Revision 1 → 2 (8 Nov 2026): reviewer refinements
+
+| # | Requested | Done |
+|---|---|---|
+| 1 | A1 must compare definitions | `platform-schema.sql`: per column type, nullability, default/generation, identity, generated, collation; all constraints, indexes, triggers; R-01a before any write |
+| 2 | `auth.identities.user_id → auth.users.id` | added to `orphans.sql` (85 checks) |
+| 3 | Storage: ids, owner, size, MIME, eTag, metadata; classify API-changed fields | every column of every object; only `updated_at`, `last_accessed_at`, `version`, `metadata.lastModified` may differ, and only on re-uploaded objects |
+| 4 | Exact versus acceptable; nothing ignored | three evidence lists; results PASS_EXACT / PASS_WITH_CLASSIFIED_DIFFERENCES / INCOMPLETE / FAIL |
+| 5 | Record A2's password change | `intentional_deviations` (now flushed to disk, revision 3) |
+| 6 | Provide scripts | done |
+
+Also fixed in revision 2: money compared as text (`JSON.parse` hid the scale), full-row Auth comparison, a stricter
+definition of an index-only row, and a clean exit on Windows.

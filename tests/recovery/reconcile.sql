@@ -28,12 +28,34 @@ SELECT json_build_object(
       'commitment_status', (SELECT json_object_agg(status, n) FROM (SELECT status, count(*) n FROM public.vw_funding_commitment_status WHERE business_id = b.id GROUP BY status) s),
       'document_sha256', (SELECT md5(coalesce(string_agg(sha256, '|' ORDER BY sha256), '')) FROM public.documents WHERE business_id = b.id)))
     FROM public.businesses b),
+  -- R-12 security posture. Scope: schema public (every Meridian object), the public and storage schema ACLs, default
+  -- privileges, storage policies and buckets. Deliberately excluded (runbook §7): functions, grants and ACLs inside
+  -- auth, storage, extensions and other platform schemas (Supabase-owned; their table definitions are R-01a), the qa
+  -- test schema (never restored), and bucket created_at/updated_at (set when migration 6 runs on each project).
   'security', json_build_object(
-    'table_grants', (SELECT md5(string_agg(grantee || ':' || table_name || ':' || privilege_type, '|' ORDER BY grantee, table_name, privilege_type)) FROM information_schema.role_table_grants WHERE table_schema = 'public' AND grantee IN ('anon', 'authenticated', 'service_role')),
-    'column_grants', (SELECT md5(string_agg(grantee || ':' || table_name || '.' || column_name || ':' || privilege_type, '|' ORDER BY 1)) FROM information_schema.column_privileges WHERE table_schema = 'public' AND grantee IN ('anon', 'authenticated', 'service_role')),
-    'policies', (SELECT md5(string_agg(schemaname || '.' || tablename || ':' || policyname || ':' || cmd || ':' || coalesce(qual, '') || ':' || coalesce(with_check, ''), '|' ORDER BY 1)) FROM pg_policies WHERE schemaname IN ('public', 'storage')),
-    'rls_enabled', (SELECT json_agg(relname ORDER BY relname) FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r' AND relrowsecurity),
-    'function_acl', (SELECT md5(string_agg(p.proname || '(' || pg_get_function_identity_arguments(p.oid) || '):' || coalesce(p.proacl::text, 'default') || ':' || p.prosecdef::text, '|' ORDER BY 1)) FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace),
-    'triggers', (SELECT md5(string_agg(tgrelid::regclass::text || ':' || tgname || ':' || tgenabled::text, '|' ORDER BY 1)) FROM pg_trigger WHERE NOT tgisinternal AND tgrelid::regclass::text NOT LIKE 'qa.%'),
-    'bucket', (SELECT json_agg(json_build_object('id', id, 'public', public, 'limit', file_size_limit)) FROM storage.buckets))
+    'relation_acl', (SELECT json_object_agg(c.relname, c.relkind::text || ' owner=' || pg_get_userbyid(c.relowner) || ' acl=' || coalesce(c.relacl::text, 'default') ORDER BY c.relname)
+                     FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')),
+    'column_acl', (SELECT json_object_agg(c.relname || '.' || a.attname, a.attacl::text ORDER BY c.relname, a.attname)
+                   FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid
+                   WHERE c.relnamespace = 'public'::regnamespace AND a.attnum > 0 AND NOT a.attisdropped AND a.attacl IS NOT NULL),
+    'rls', (SELECT json_object_agg(relname, json_build_object('enabled', relrowsecurity, 'forced', relforcerowsecurity) ORDER BY relname)
+            FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind IN ('r', 'p')),
+    'view_options', (SELECT json_object_agg(relname, coalesce(array_to_string(reloptions, ','), '') ORDER BY relname)
+                     FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind IN ('v', 'm')),
+    'schema_acl', (SELECT json_object_agg(nspname, 'owner=' || pg_get_userbyid(nspowner) || ' acl=' || coalesce(nspacl::text, 'default') ORDER BY nspname)
+                   FROM pg_namespace WHERE nspname IN ('public', 'storage')),
+    'default_acl', (SELECT json_agg(pg_get_userbyid(defaclrole) || ' ' || coalesce(nullif(defaclnamespace, 0)::regnamespace::text, '(global)') || ' ' || defaclobjtype::text || ' ' || coalesce(defaclacl::text, '')
+                                    ORDER BY pg_get_userbyid(defaclrole), defaclnamespace, defaclobjtype)
+                    FROM pg_default_acl WHERE defaclnamespace IN (0, 'public'::regnamespace)),
+    'policies', (SELECT json_object_agg(schemaname || '.' || tablename || '.' || policyname,
+                        permissive || ' ' || array_to_string(roles, ',') || ' ' || cmd || ' using=' || coalesce(qual, '') || ' check=' || coalesce(with_check, '') ORDER BY schemaname, tablename, policyname)
+                 FROM pg_policies WHERE schemaname IN ('public', 'storage')),
+    'functions', (SELECT json_object_agg(p.oid::regprocedure::text, json_build_object(
+                        'definition_md5', CASE WHEN p.prokind IN ('f', 'p') THEN md5(pg_get_functiondef(p.oid)) END,
+                        'security_definer', p.prosecdef, 'config', p.proconfig, 'volatility', p.provolatile,
+                        'leakproof', p.proleakproof, 'owner', pg_get_userbyid(p.proowner), 'acl', coalesce(p.proacl::text, 'default')) ORDER BY p.oid::regprocedure::text)
+                  FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace),
+    'triggers', (SELECT json_object_agg(tgrelid::regclass::text || '.' || tgname, tgenabled::text || ' ' || md5(pg_get_triggerdef(oid)) ORDER BY tgrelid::regclass::text, tgname)
+                 FROM pg_trigger WHERE NOT tgisinternal AND tgrelid::regclass::text NOT LIKE 'qa.%'),
+    'buckets', (SELECT json_object_agg(b.id, to_jsonb(b) - 'created_at' - 'updated_at' ORDER BY b.id) FROM storage.buckets b))
 );
