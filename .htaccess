@@ -1,0 +1,2 @@
+# This repository sits inside XAMPP's htdocs. Nothing in it is meant to be served by Apache.
+Require all denied
