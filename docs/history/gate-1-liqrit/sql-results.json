@@ -1,0 +1,2131 @@
+{
+  "suite": "sql",
+  "project": "xpuhrahnndjfcpatarbv",
+  "note": "latest result per test_id is authoritative; superseded rows are kept as evidence of defects found and fixed",
+  "summary_latest": {
+    "01_fixtures:PASS": 8,
+    "10_security:PASS": 80,
+    "10_security:INFO": 1,
+    "20_financial:PASS": 74,
+    "21_concurrency:PASS": 3,
+    "21_concurrency:FAIL": 1,
+    "21_concurrency:INFO": 1,
+    "30_csv_import:PASS": 31,
+    "40_gap_checks:PASS": 6
+  },
+  "all_rows": 209,
+  "superseded": [
+    {
+      "test_id": "SEC-ANON-09",
+      "status": "FAIL",
+      "actual": "4"
+    },
+    {
+      "test_id": "SEC-FN-01",
+      "status": "FAIL",
+      "actual": "commit_import_batch,create_workspace,get_account_balances,get_available_cash,get_current_business_id,guard_business_identity,guard_profile_identity,reject_mutation,reverse_payment_allocation,reverse_transaction,revoke_funding_commitment,set_updated_at"
+    },
+    {
+      "test_id": "CASH-12",
+      "status": "PASS",
+      "actual": "39500.00"
+    },
+    {
+      "test_id": "CASH-14",
+      "status": "FAIL",
+      "actual": "0"
+    }
+  ],
+  "results": [
+    {
+      "seq": 1,
+      "suite": "01_fixtures",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:27:57.332588+00:00",
+      "status": "PASS",
+      "test_id": "BOOT-01",
+      "expected": "ok",
+      "check_name": "founder A onboards through create_workspace()"
+    },
+    {
+      "seq": 2,
+      "suite": "01_fixtures",
+      "actual": "INR",
+      "run_at": "2026-11-07T18:27:57.333615+00:00",
+      "status": "PASS",
+      "test_id": "BOOT-02",
+      "expected": "INR",
+      "check_name": "currency normalised to upper case and fixed"
+    },
+    {
+      "seq": 3,
+      "suite": "01_fixtures",
+      "actual": "founder/true",
+      "run_at": "2026-11-07T18:27:57.334339+00:00",
+      "status": "PASS",
+      "test_id": "BOOT-03",
+      "expected": "founder/true",
+      "check_name": "founder participant created and linked to the profile"
+    },
+    {
+      "seq": 4,
+      "suite": "01_fixtures",
+      "actual": "23505 this user already has a workspace",
+      "run_at": "2026-11-07T18:27:57.335573+00:00",
+      "status": "PASS",
+      "test_id": "BOOT-04",
+      "expected": "23505",
+      "check_name": "founder A cannot create a second workspace"
+    },
+    {
+      "seq": 5,
+      "suite": "01_fixtures",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:27:57.337776+00:00",
+      "status": "PASS",
+      "test_id": "BOOT-05",
+      "expected": "ok",
+      "check_name": "founder B onboards through create_workspace()"
+    },
+    {
+      "seq": 6,
+      "suite": "01_fixtures",
+      "actual": "23505 this installation already has its business workspace",
+      "run_at": "2026-11-07T18:27:57.338458+00:00",
+      "status": "PASS",
+      "test_id": "BOOT-06",
+      "expected": "23505",
+      "check_name": "a third workspace is refused by the installation limit"
+    },
+    {
+      "seq": 7,
+      "suite": "01_fixtures",
+      "actual": "42501 permission denied for function create_workspace",
+      "run_at": "2026-11-07T18:27:57.338956+00:00",
+      "status": "PASS",
+      "test_id": "BOOT-07",
+      "expected": "42501",
+      "check_name": "anonymous caller cannot create a workspace"
+    },
+    {
+      "seq": 8,
+      "suite": "01_fixtures",
+      "actual": "ok",
+      "run_at": "2026-11-07T18:27:57.372316+00:00",
+      "status": "PASS",
+      "test_id": "FIXTURES",
+      "expected": "ok",
+      "check_name": "domain fixtures created by founders through RLS"
+    },
+    {
+      "seq": 9,
+      "suite": "10_security",
+      "actual": "0 readable",
+      "run_at": "2026-11-07T18:30:40.749996+00:00",
+      "status": "PASS",
+      "test_id": "SEC-ANON-01",
+      "expected": "0 readable",
+      "check_name": "anon SELECT is refused on every public table and view"
+    },
+    {
+      "seq": 10,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table projects",
+      "run_at": "2026-11-07T18:30:40.751582+00:00",
+      "status": "PASS",
+      "test_id": "SEC-ANON-02",
+      "expected": "42501",
+      "check_name": "anon INSERT into projects refused"
+    },
+    {
+      "seq": 11,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table transactions",
+      "run_at": "2026-11-07T18:30:40.75189+00:00",
+      "status": "PASS",
+      "test_id": "SEC-ANON-03",
+      "expected": "42501",
+      "check_name": "anon UPDATE refused"
+    },
+    {
+      "seq": 12,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table contacts",
+      "run_at": "2026-11-07T18:30:40.752159+00:00",
+      "status": "PASS",
+      "test_id": "SEC-ANON-04",
+      "expected": "42501",
+      "check_name": "anon DELETE refused"
+    },
+    {
+      "seq": 13,
+      "suite": "10_security",
+      "actual": "42501 permission denied for function get_available_cash",
+      "run_at": "2026-11-07T18:30:40.752515+00:00",
+      "status": "PASS",
+      "test_id": "SEC-ANON-05",
+      "expected": "42501",
+      "check_name": "anon cannot call get_available_cash()"
+    },
+    {
+      "seq": 14,
+      "suite": "10_security",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:30:40.760429+00:00",
+      "status": "PASS",
+      "test_id": "SEC-ANON-06",
+      "expected": "ok",
+      "check_name": "anon storage query runs but is filtered by RLS"
+    },
+    {
+      "seq": 15,
+      "suite": "10_security",
+      "actual": "0",
+      "run_at": "2026-11-07T18:30:40.760904+00:00",
+      "status": "PASS",
+      "test_id": "SEC-ANON-07",
+      "expected": "0",
+      "check_name": "anon sees zero vault objects"
+    },
+    {
+      "seq": 16,
+      "suite": "10_security",
+      "actual": "0",
+      "run_at": "2026-11-07T18:30:40.763565+00:00",
+      "status": "PASS",
+      "test_id": "SEC-ANON-08",
+      "expected": "0",
+      "check_name": "anon holds no privilege on any public relation (catalog)"
+    },
+    {
+      "seq": 17,
+      "suite": "10_security",
+      "actual": "4",
+      "run_at": "2026-11-07T18:30:40.782757+00:00",
+      "status": "FAIL",
+      "test_id": "SEC-ANON-09",
+      "expected": "0",
+      "check_name": "anon can execute no public function (catalog)"
+    },
+    {
+      "seq": 18,
+      "suite": "10_security",
+      "actual": "0",
+      "run_at": "2026-11-07T18:30:40.783862+00:00",
+      "status": "PASS",
+      "test_id": "SEC-ANON-10",
+      "expected": "0",
+      "check_name": "PUBLIC holds no privilege on any public relation (catalog)"
+    },
+    {
+      "seq": 19,
+      "suite": "10_security",
+      "actual": "0 leaks",
+      "run_at": "2026-11-07T18:30:40.802262+00:00",
+      "status": "PASS",
+      "test_id": "SEC-TEN-01",
+      "expected": "0 leaks",
+      "check_name": "A reads zero rows of business B in every tenant table and view"
+    },
+    {
+      "seq": 20,
+      "suite": "10_security",
+      "actual": "0",
+      "run_at": "2026-11-07T18:30:40.802702+00:00",
+      "status": "PASS",
+      "test_id": "SEC-TEN-02",
+      "expected": "0",
+      "check_name": "A cannot see business B"
+    },
+    {
+      "seq": 21,
+      "suite": "10_security",
+      "actual": "OK 0",
+      "run_at": "2026-11-07T18:30:40.803327+00:00",
+      "status": "PASS",
+      "test_id": "SEC-TEN-03",
+      "expected": "ok:0",
+      "check_name": "A updating B project affects 0 rows"
+    },
+    {
+      "seq": 22,
+      "suite": "10_security",
+      "actual": "OK 0",
+      "run_at": "2026-11-07T18:30:40.8038+00:00",
+      "status": "PASS",
+      "test_id": "SEC-TEN-04",
+      "expected": "ok:0",
+      "check_name": "A deleting B project affects 0 rows"
+    },
+    {
+      "seq": 23,
+      "suite": "10_security",
+      "actual": "42501 new row violates row-level security policy for table \"projects\"",
+      "run_at": "2026-11-07T18:30:40.804208+00:00",
+      "status": "PASS",
+      "test_id": "SEC-TEN-05",
+      "expected": "42501",
+      "check_name": "A inserting a row stamped with B business_id is refused"
+    },
+    {
+      "seq": 24,
+      "suite": "10_security",
+      "actual": "23503 account ce42b100-34ba-4693-a1d8-ffdc09bae76d not found",
+      "run_at": "2026-11-07T18:30:40.806515+00:00",
+      "status": "PASS",
+      "test_id": "SEC-TEN-06",
+      "expected": "err",
+      "check_name": "A cannot reference B account from an A transaction (composite FK)"
+    },
+    {
+      "seq": 25,
+      "suite": "10_security",
+      "actual": "23503 transaction a79f3702-3a3d-4e9d-8ec1-90eea98a660e not found",
+      "run_at": "2026-11-07T18:30:40.8074+00:00",
+      "status": "PASS",
+      "test_id": "SEC-TEN-07",
+      "expected": "err",
+      "check_name": "A cannot allocate B transaction to B commitment"
+    },
+    {
+      "seq": 26,
+      "suite": "10_security",
+      "actual": "0",
+      "run_at": "2026-11-07T18:30:40.807782+00:00",
+      "status": "PASS",
+      "test_id": "SEC-TEN-08",
+      "expected": "0",
+      "check_name": "B allocation attempt left no row and no lock leak (A still sees nothing)"
+    },
+    {
+      "seq": 27,
+      "suite": "10_security",
+      "actual": "P0002 transaction a79f3702-3a3d-4e9d-8ec1-90eea98a660e not found",
+      "run_at": "2026-11-07T18:30:40.808656+00:00",
+      "status": "PASS",
+      "test_id": "SEC-TEN-09",
+      "expected": "P0002",
+      "check_name": "A cannot reverse B transaction through the RPC"
+    },
+    {
+      "seq": 28,
+      "suite": "10_security",
+      "actual": "P0002 commitment 347336c5-bccb-4979-9076-e26b369e6b97 not found",
+      "run_at": "2026-11-07T18:30:40.809352+00:00",
+      "status": "PASS",
+      "test_id": "SEC-TEN-10",
+      "expected": "P0002",
+      "check_name": "A cannot revoke B commitment through the RPC"
+    },
+    {
+      "seq": 29,
+      "suite": "10_security",
+      "actual": "false",
+      "run_at": "2026-11-07T18:30:40.809796+00:00",
+      "status": "PASS",
+      "test_id": "SEC-TEN-11",
+      "expected": "false",
+      "check_name": "B transaction is still active after the attempts"
+    },
+    {
+      "seq": 30,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table profiles",
+      "run_at": "2026-11-07T18:30:40.810543+00:00",
+      "status": "PASS",
+      "test_id": "SEC-PROF-01",
+      "expected": "42501",
+      "check_name": "stranger C cannot insert a profile into business A"
+    },
+    {
+      "seq": 31,
+      "suite": "10_security",
+      "actual": "none",
+      "run_at": "2026-11-07T18:30:40.810831+00:00",
+      "status": "PASS",
+      "test_id": "SEC-PROF-02",
+      "expected": "none",
+      "check_name": "stranger C resolves to no business"
+    },
+    {
+      "seq": 32,
+      "suite": "10_security",
+      "actual": "0",
+      "run_at": "2026-11-07T18:30:40.811549+00:00",
+      "status": "PASS",
+      "test_id": "SEC-PROF-03",
+      "expected": "0",
+      "check_name": "stranger C sees nothing"
+    },
+    {
+      "seq": 33,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table profiles",
+      "run_at": "2026-11-07T18:30:40.812111+00:00",
+      "status": "PASS",
+      "test_id": "SEC-PROF-04",
+      "expected": "42501",
+      "check_name": "founder B cannot re-point own profile to business A (column privilege)"
+    },
+    {
+      "seq": 34,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table profiles",
+      "run_at": "2026-11-07T18:30:40.8125+00:00",
+      "status": "PASS",
+      "test_id": "SEC-PROF-05",
+      "expected": "42501",
+      "check_name": "founder B cannot change own profile id"
+    },
+    {
+      "seq": 35,
+      "suite": "10_security",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:30:40.81361+00:00",
+      "status": "PASS",
+      "test_id": "SEC-PROF-06",
+      "expected": "ok:1",
+      "check_name": "founder B can still edit own display settings"
+    },
+    {
+      "seq": 36,
+      "suite": "10_security",
+      "actual": "23514 a profile cannot move to another user or business",
+      "run_at": "2026-11-07T18:30:40.815047+00:00",
+      "status": "PASS",
+      "test_id": "SEC-PROF-07",
+      "expected": "23514",
+      "check_name": "even service_role cannot move a profile to another business (trigger)"
+    },
+    {
+      "seq": 37,
+      "suite": "10_security",
+      "actual": "23514 base_currency is fixed at onboarding and cannot change",
+      "run_at": "2026-11-07T18:30:40.815513+00:00",
+      "status": "PASS",
+      "test_id": "SEC-PROF-08",
+      "expected": "23514",
+      "check_name": "even service_role cannot change base_currency (trigger)"
+    },
+    {
+      "seq": 38,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table businesses",
+      "run_at": "2026-11-07T18:30:40.815991+00:00",
+      "status": "PASS",
+      "test_id": "SEC-PROF-09",
+      "expected": "42501",
+      "check_name": "founder cannot change base_currency (column privilege)"
+    },
+    {
+      "seq": 39,
+      "suite": "10_security",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:30:40.819147+00:00",
+      "status": "PASS",
+      "test_id": "SEC-PROF-10",
+      "expected": "ok:1",
+      "check_name": "founder can rename the business"
+    },
+    {
+      "seq": 40,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table businesses",
+      "run_at": "2026-11-07T18:30:40.819485+00:00",
+      "status": "PASS",
+      "test_id": "SEC-PROF-11",
+      "expected": "42501",
+      "check_name": "founder cannot delete the business"
+    },
+    {
+      "seq": 41,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table funding_commitments",
+      "run_at": "2026-11-07T18:30:40.820208+00:00",
+      "status": "PASS",
+      "test_id": "SEC-COL-01",
+      "expected": "42501",
+      "check_name": "client cannot set revoked_at on INSERT"
+    },
+    {
+      "seq": 42,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table funding_commitments",
+      "run_at": "2026-11-07T18:30:40.820627+00:00",
+      "status": "PASS",
+      "test_id": "SEC-COL-02",
+      "expected": "42501",
+      "check_name": "client cannot set revoked_at by UPDATE"
+    },
+    {
+      "seq": 43,
+      "suite": "10_security",
+      "actual": "0",
+      "run_at": "2026-11-07T18:30:40.829342+00:00",
+      "status": "PASS",
+      "test_id": "SEC-COL-03",
+      "expected": "0",
+      "check_name": "commitments have no writable status column at all"
+    },
+    {
+      "seq": 44,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table transactions",
+      "run_at": "2026-11-07T18:30:40.829891+00:00",
+      "status": "PASS",
+      "test_id": "SEC-COL-04",
+      "expected": "42501",
+      "check_name": "client cannot change a transaction amount"
+    },
+    {
+      "seq": 45,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table transactions",
+      "run_at": "2026-11-07T18:30:40.830388+00:00",
+      "status": "PASS",
+      "test_id": "SEC-COL-05",
+      "expected": "42501",
+      "check_name": "client cannot mark a transaction reversed directly"
+    },
+    {
+      "seq": 46,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table transactions",
+      "run_at": "2026-11-07T18:30:40.830769+00:00",
+      "status": "PASS",
+      "test_id": "SEC-COL-06",
+      "expected": "42501",
+      "check_name": "client cannot insert a pre-reversed transaction"
+    },
+    {
+      "seq": 47,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table transactions",
+      "run_at": "2026-11-07T18:30:40.831152+00:00",
+      "status": "PASS",
+      "test_id": "SEC-COL-07",
+      "expected": "42501",
+      "check_name": "client cannot forge import provenance on a transaction"
+    },
+    {
+      "seq": 48,
+      "suite": "10_security",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:30:40.833038+00:00",
+      "status": "PASS",
+      "test_id": "SEC-COL-08",
+      "expected": "ok:1",
+      "check_name": "client can still edit a transaction description"
+    },
+    {
+      "seq": 49,
+      "suite": "10_security",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:30:40.833235+00:00",
+      "status": "PASS",
+      "test_id": "SEC-COL-09",
+      "expected": "ok",
+      "check_name": "setting the old GUC changes nothing: status is still derived"
+    },
+    {
+      "seq": 50,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table funding_commitments",
+      "run_at": "2026-11-07T18:30:40.833661+00:00",
+      "status": "PASS",
+      "test_id": "SEC-COL-10",
+      "expected": "42501",
+      "check_name": "...and revoked_at is still not client-writable with the GUC set"
+    },
+    {
+      "seq": 51,
+      "suite": "10_security",
+      "actual": "23514 financial fields of transaction a79f3702-3a3d-4e9d-8ec1-90eea98a660e are immutable; reverse it and record a new transaction",
+      "run_at": "2026-11-07T18:30:40.834188+00:00",
+      "status": "PASS",
+      "test_id": "SEC-COL-11",
+      "expected": "23514",
+      "check_name": "even service_role cannot change a transaction amount (trigger)"
+    },
+    {
+      "seq": 52,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table transactions",
+      "run_at": "2026-11-07T18:30:40.834821+00:00",
+      "status": "PASS",
+      "test_id": "SEC-DEL-01",
+      "expected": "42501",
+      "check_name": "founder cannot DELETE transactions"
+    },
+    {
+      "seq": 53,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table payment_allocations",
+      "run_at": "2026-11-07T18:30:40.835407+00:00",
+      "status": "PASS",
+      "test_id": "SEC-DEL-02",
+      "expected": "42501",
+      "check_name": "founder cannot DELETE payment allocations"
+    },
+    {
+      "seq": 54,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table funding_commitments",
+      "run_at": "2026-11-07T18:30:40.835728+00:00",
+      "status": "PASS",
+      "test_id": "SEC-DEL-03",
+      "expected": "42501",
+      "check_name": "founder cannot DELETE funding commitments"
+    },
+    {
+      "seq": 55,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table documents",
+      "run_at": "2026-11-07T18:30:40.83609+00:00",
+      "status": "PASS",
+      "test_id": "SEC-DEL-04",
+      "expected": "42501",
+      "check_name": "founder cannot DELETE documents"
+    },
+    {
+      "seq": 56,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table subtasks",
+      "run_at": "2026-11-07T18:30:40.836289+00:00",
+      "status": "PASS",
+      "test_id": "SEC-DEL-05",
+      "expected": "42501",
+      "check_name": "founder cannot TRUNCATE anything"
+    },
+    {
+      "seq": 57,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table transactions",
+      "run_at": "2026-11-07T18:30:40.836575+00:00",
+      "status": "PASS",
+      "test_id": "SEC-DEL-06",
+      "expected": "42501",
+      "check_name": "service_role cannot DELETE transactions"
+    },
+    {
+      "seq": 58,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table transactions",
+      "run_at": "2026-11-07T18:30:40.83679+00:00",
+      "status": "PASS",
+      "test_id": "SEC-DEL-07",
+      "expected": "42501",
+      "check_name": "service_role cannot TRUNCATE transactions"
+    },
+    {
+      "seq": 59,
+      "suite": "10_security",
+      "actual": "42501 DELETE on transactions is not permitted: transactions history is append-only",
+      "run_at": "2026-11-07T18:30:40.837168+00:00",
+      "status": "PASS",
+      "test_id": "SEC-DEL-08",
+      "expected": "42501",
+      "check_name": "even the table owner is stopped by the no-delete trigger"
+    },
+    {
+      "seq": 60,
+      "suite": "10_security",
+      "actual": "42501 TRUNCATE on payment_allocations is not permitted: payment_allocations history is append-only",
+      "run_at": "2026-11-07T18:30:40.837801+00:00",
+      "status": "PASS",
+      "test_id": "SEC-DEL-09",
+      "expected": "42501",
+      "check_name": "even the table owner is stopped by the no-truncate trigger"
+    },
+    {
+      "seq": 61,
+      "suite": "10_security",
+      "actual": "true",
+      "run_at": "2026-11-07T18:30:40.838126+00:00",
+      "status": "PASS",
+      "test_id": "SEC-DEL-10",
+      "expected": "true",
+      "check_name": "every transaction is still present"
+    },
+    {
+      "seq": 62,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table activity_records",
+      "run_at": "2026-11-07T18:30:40.838703+00:00",
+      "status": "PASS",
+      "test_id": "SEC-ACT-01",
+      "expected": "42501",
+      "check_name": "founder cannot forge an activity record"
+    },
+    {
+      "seq": 63,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table activity_records",
+      "run_at": "2026-11-07T18:30:40.838914+00:00",
+      "status": "PASS",
+      "test_id": "SEC-ACT-02",
+      "expected": "42501",
+      "check_name": "founder cannot edit an activity record"
+    },
+    {
+      "seq": 64,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table activity_records",
+      "run_at": "2026-11-07T18:30:40.839134+00:00",
+      "status": "PASS",
+      "test_id": "SEC-ACT-03",
+      "expected": "42501",
+      "check_name": "founder cannot delete an activity record"
+    },
+    {
+      "seq": 65,
+      "suite": "10_security",
+      "actual": "42501 permission denied for function log_activity",
+      "run_at": "2026-11-07T18:30:40.83933+00:00",
+      "status": "PASS",
+      "test_id": "SEC-ACT-04",
+      "expected": "42501",
+      "check_name": "founder cannot call the internal writer"
+    },
+    {
+      "seq": 66,
+      "suite": "10_security",
+      "actual": "user/true",
+      "run_at": "2026-11-07T18:30:40.839925+00:00",
+      "status": "PASS",
+      "test_id": "SEC-ACT-05",
+      "expected": "user/true",
+      "check_name": "trigger-written activity names the real actor"
+    },
+    {
+      "seq": 67,
+      "suite": "10_security",
+      "actual": "42501 permission denied for table activity_records",
+      "run_at": "2026-11-07T18:30:40.840241+00:00",
+      "status": "PASS",
+      "test_id": "SEC-ACT-06",
+      "expected": "42501",
+      "check_name": "service_role cannot edit or delete activity either"
+    },
+    {
+      "seq": 68,
+      "suite": "10_security",
+      "actual": "commit_import_batch,create_workspace,get_account_balances,get_available_cash,get_current_business_id,guard_business_identity,guard_profile_identity,reject_mutation,reverse_payment_allocation,reverse_transaction,revoke_funding_commitment,set_updated_at",
+      "run_at": "2026-11-07T18:30:40.843838+00:00",
+      "status": "FAIL",
+      "test_id": "SEC-FN-01",
+      "expected": "commit_import_batch,create_workspace,get_account_balances,get_available_cash,get_current_business_id,reverse_payment_allocation,reverse_transaction,revoke_funding_commitment",
+      "check_name": "authenticated can execute exactly the intended public functions"
+    },
+    {
+      "seq": 69,
+      "suite": "10_security",
+      "actual": "0",
+      "run_at": "2026-11-07T18:30:40.844978+00:00",
+      "status": "PASS",
+      "test_id": "SEC-FN-02",
+      "expected": "0",
+      "check_name": "every SECURITY DEFINER function pins search_path"
+    },
+    {
+      "seq": 70,
+      "suite": "10_security",
+      "actual": "0",
+      "run_at": "2026-11-07T18:30:40.845662+00:00",
+      "status": "PASS",
+      "test_id": "SEC-FN-03",
+      "expected": "0",
+      "check_name": "every public function pins search_path (advisor lint 0011)"
+    },
+    {
+      "seq": 71,
+      "suite": "10_security",
+      "actual": "1500.00",
+      "run_at": "2026-11-07T18:30:40.84756+00:00",
+      "status": "PASS",
+      "test_id": "SEC-FN-04",
+      "expected": "1500.00",
+      "check_name": "service_role reads cash by naming the business"
+    },
+    {
+      "seq": 72,
+      "suite": "10_security",
+      "actual": "42501 permission denied for function get_available_cash",
+      "run_at": "2026-11-07T18:30:40.847756+00:00",
+      "status": "PASS",
+      "test_id": "SEC-FN-05",
+      "expected": "42501",
+      "check_name": "service_role cannot use the user-scoped cash RPC"
+    },
+    {
+      "seq": 73,
+      "suite": "10_security",
+      "actual": "42501 permission denied for function reverse_transaction",
+      "run_at": "2026-11-07T18:30:40.848032+00:00",
+      "status": "PASS",
+      "test_id": "SEC-FN-06",
+      "expected": "42501",
+      "check_name": "service_role cannot use the user reversal RPC"
+    },
+    {
+      "seq": 74,
+      "suite": "10_security",
+      "actual": "42501 permission denied for function get_available_cash_for_business",
+      "run_at": "2026-11-07T18:30:40.848406+00:00",
+      "status": "PASS",
+      "test_id": "SEC-FN-07",
+      "expected": "42501",
+      "check_name": "founder cannot call the service-only cash function"
+    },
+    {
+      "seq": 75,
+      "suite": "10_security",
+      "actual": "42501 no workspace for the current user",
+      "run_at": "2026-11-07T18:30:40.848895+00:00",
+      "status": "PASS",
+      "test_id": "SEC-FN-08",
+      "expected": "42501",
+      "check_name": "a user without a workspace gets an error, not another business's cash"
+    },
+    {
+      "seq": 76,
+      "suite": "10_security",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:30:40.85308+00:00",
+      "status": "PASS",
+      "test_id": "SEC-STO-01",
+      "expected": "ok:1",
+      "check_name": "A can upload into its own folder"
+    },
+    {
+      "seq": 77,
+      "suite": "10_security",
+      "actual": "42501 new row violates row-level security policy for table \"objects\"",
+      "run_at": "2026-11-07T18:30:40.853513+00:00",
+      "status": "PASS",
+      "test_id": "SEC-STO-02",
+      "expected": "42501",
+      "check_name": "A cannot upload into B folder"
+    },
+    {
+      "seq": 78,
+      "suite": "10_security",
+      "actual": "3dbab4a5-bd5d-4d1c-a6a6-639bbebd4853/a-doc.pdf",
+      "run_at": "2026-11-07T18:30:40.854215+00:00",
+      "status": "PASS",
+      "test_id": "SEC-STO-03",
+      "expected": "3dbab4a5-bd5d-4d1c-a6a6-639bbebd4853/a-doc.pdf",
+      "check_name": "A lists only its own object despite a malformed object name"
+    },
+    {
+      "seq": 79,
+      "suite": "10_security",
+      "actual": "OK 0",
+      "run_at": "2026-11-07T18:30:40.854519+00:00",
+      "status": "PASS",
+      "test_id": "SEC-STO-04",
+      "expected": "ok:0",
+      "check_name": "A cannot overwrite (UPDATE) its own object"
+    },
+    {
+      "seq": 80,
+      "suite": "10_security",
+      "actual": "42501 Direct deletion from storage tables is not allowed. Use the Storage API instead.",
+      "run_at": "2026-11-07T18:30:40.854926+00:00",
+      "status": "INFO",
+      "test_id": "SEC-STO-05a",
+      "expected": null,
+      "check_name": "A attempts to delete its own object"
+    },
+    {
+      "seq": 81,
+      "suite": "10_security",
+      "actual": "1",
+      "run_at": "2026-11-07T18:30:40.855272+00:00",
+      "status": "PASS",
+      "test_id": "SEC-STO-05",
+      "expected": "1",
+      "check_name": "the object survives: deletion is server-only"
+    },
+    {
+      "seq": 82,
+      "suite": "10_security",
+      "actual": "23514 new row for relation \"documents\" violates check constraint \"chk_documents_key_scope\"",
+      "run_at": "2026-11-07T18:30:40.855885+00:00",
+      "status": "PASS",
+      "test_id": "SEC-STO-06",
+      "expected": "23514",
+      "check_name": "A cannot register a document outside its folder"
+    },
+    {
+      "seq": 83,
+      "suite": "10_security",
+      "actual": "false/52428800",
+      "run_at": "2026-11-07T18:30:40.856239+00:00",
+      "status": "PASS",
+      "test_id": "SEC-STO-07",
+      "expected": "false/52428800",
+      "check_name": "company-vault bucket is private with a 50 MB limit"
+    },
+    {
+      "seq": 84,
+      "suite": "10_security",
+      "actual": "0",
+      "run_at": "2026-11-07T18:30:40.85704+00:00",
+      "status": "PASS",
+      "test_id": "SEC-INV-01",
+      "expected": "0",
+      "check_name": "every public table has RLS enabled and forced"
+    },
+    {
+      "seq": 85,
+      "suite": "10_security",
+      "actual": "0",
+      "run_at": "2026-11-07T18:30:40.857728+00:00",
+      "status": "PASS",
+      "test_id": "SEC-INV-02",
+      "expected": "0",
+      "check_name": "authenticated holds no TRUNCATE, TRIGGER, REFERENCES or MAINTAIN anywhere"
+    },
+    {
+      "seq": 86,
+      "suite": "10_security",
+      "actual": "0",
+      "run_at": "2026-11-07T18:30:40.858257+00:00",
+      "status": "PASS",
+      "test_id": "SEC-INV-03",
+      "expected": "0",
+      "check_name": "service_role holds no DELETE/TRUNCATE on financial history tables"
+    },
+    {
+      "seq": 87,
+      "suite": "10_security",
+      "actual": "installation_settings",
+      "run_at": "2026-11-07T18:30:40.860008+00:00",
+      "status": "PASS",
+      "test_id": "SEC-INV-04",
+      "expected": "installation_settings",
+      "check_name": "tables without a tenant policy are only the server-only settings table"
+    },
+    {
+      "seq": 88,
+      "suite": "10_security",
+      "actual": "0",
+      "run_at": "2026-11-07T18:30:40.861246+00:00",
+      "status": "PASS",
+      "test_id": "SEC-INV-05",
+      "expected": "0",
+      "check_name": "default privileges stay fail-closed for future objects (no anon/authenticated grants)"
+    },
+    {
+      "seq": 89,
+      "suite": "10_security",
+      "actual": "0",
+      "run_at": "2026-11-07T18:31:54.571886+00:00",
+      "status": "PASS",
+      "test_id": "SEC-ANON-09",
+      "expected": "0",
+      "check_name": "anon can execute no public function (catalog)"
+    },
+    {
+      "seq": 90,
+      "suite": "10_security",
+      "actual": "commit_import_batch,create_workspace,get_account_balances,get_available_cash,get_current_business_id,reverse_payment_allocation,reverse_transaction,revoke_funding_commitment",
+      "run_at": "2026-11-07T18:31:54.575049+00:00",
+      "status": "PASS",
+      "test_id": "SEC-FN-01",
+      "expected": "commit_import_batch,create_workspace,get_account_balances,get_available_cash,get_current_business_id,reverse_payment_allocation,reverse_transaction,revoke_funding_commitment",
+      "check_name": "authenticated can execute exactly the intended public functions"
+    },
+    {
+      "seq": 91,
+      "suite": "10_security",
+      "actual": "true",
+      "run_at": "2026-11-07T18:31:54.576048+00:00",
+      "status": "PASS",
+      "test_id": "SEC-INV-06",
+      "expected": "true",
+      "check_name": "global default privileges give PUBLIC no EXECUTE on functions postgres creates"
+    },
+    {
+      "seq": 92,
+      "suite": "20_financial",
+      "actual": "ok",
+      "run_at": "2026-11-07T18:35:52.657086+00:00",
+      "status": "PASS",
+      "test_id": "FIN-SETUP",
+      "expected": "ok",
+      "check_name": "financial fixtures created by founder A through RLS"
+    },
+    {
+      "seq": 93,
+      "suite": "20_financial",
+      "actual": "pledged/0.00",
+      "run_at": "2026-11-07T18:35:52.660969+00:00",
+      "status": "PASS",
+      "test_id": "FIN-01",
+      "expected": "pledged/0.00",
+      "check_name": "a pledge is not money: a new commitment shows 0 received"
+    },
+    {
+      "seq": 94,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.664719+00:00",
+      "status": "PASS",
+      "test_id": "FIN-02",
+      "expected": "ok:1",
+      "check_name": "allocate founder receipt 1 (10000) to founder commitment"
+    },
+    {
+      "seq": 95,
+      "suite": "20_financial",
+      "actual": "partially_paid/10000.00",
+      "run_at": "2026-11-07T18:35:52.665828+00:00",
+      "status": "PASS",
+      "test_id": "FIN-03",
+      "expected": "partially_paid/10000.00",
+      "check_name": "one of two payments -> partially_paid, 10000 outstanding"
+    },
+    {
+      "seq": 96,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.667371+00:00",
+      "status": "PASS",
+      "test_id": "FIN-04",
+      "expected": "ok:1",
+      "check_name": "allocate founder receipt 2 (10000)"
+    },
+    {
+      "seq": 97,
+      "suite": "20_financial",
+      "actual": "fulfilled/20000.00/0.00",
+      "run_at": "2026-11-07T18:35:52.668335+00:00",
+      "status": "PASS",
+      "test_id": "FIN-05",
+      "expected": "fulfilled/20000.00/0.00",
+      "check_name": "multiple payments -> fulfilled"
+    },
+    {
+      "seq": 98,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.669854+00:00",
+      "status": "PASS",
+      "test_id": "FIN-06",
+      "expected": "ok:1",
+      "check_name": "cofounder partial payment 4000 of 10000"
+    },
+    {
+      "seq": 99,
+      "suite": "20_financial",
+      "actual": "30000.00/35000.00/24000.00/11000.00/0.00",
+      "run_at": "2026-11-07T18:35:52.672006+00:00",
+      "status": "PASS",
+      "test_id": "FIN-07",
+      "expected": "30000.00/35000.00/24000.00/11000.00/0.00",
+      "check_name": "requirement: required/committed/received/outstanding/gap"
+    },
+    {
+      "seq": 100,
+      "suite": "20_financial",
+      "actual": "23514 this commitment belongs to another participant; the payment must come from that participant",
+      "run_at": "2026-11-07T18:35:52.672868+00:00",
+      "status": "PASS",
+      "test_id": "FIN-08",
+      "expected": "23514",
+      "check_name": "founder money cannot satisfy the cofounder commitment"
+    },
+    {
+      "seq": 101,
+      "suite": "20_financial",
+      "actual": "23514 this commitment belongs to another participant; the payment must come from that participant",
+      "run_at": "2026-11-07T18:35:52.673682+00:00",
+      "status": "PASS",
+      "test_id": "FIN-09",
+      "expected": "23514",
+      "check_name": "a payment with no participant cannot satisfy a participant commitment"
+    },
+    {
+      "seq": 102,
+      "suite": "20_financial",
+      "actual": "23514 only funding receipts (capital, loans, third-party funding) can satisfy a commitment; got income operational",
+      "run_at": "2026-11-07T18:35:52.67436+00:00",
+      "status": "PASS",
+      "test_id": "FIN-10",
+      "expected": "23514",
+      "check_name": "customer revenue cannot satisfy a funding commitment"
+    },
+    {
+      "seq": 103,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.675749+00:00",
+      "status": "PASS",
+      "test_id": "FIN-11",
+      "expected": "ok:1",
+      "check_name": "third-party grant satisfies the third-party commitment"
+    },
+    {
+      "seq": 104,
+      "suite": "20_financial",
+      "actual": "23514 allocations (2501.00) would exceed the transaction amount (2500.00)",
+      "run_at": "2026-11-07T18:35:52.676635+00:00",
+      "status": "PASS",
+      "test_id": "FIN-12",
+      "expected": "23514",
+      "check_name": "a transaction cannot be allocated beyond its amount"
+    },
+    {
+      "seq": 105,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.677965+00:00",
+      "status": "PASS",
+      "test_id": "FIN-13",
+      "expected": "ok:1",
+      "check_name": "angel tranche 3000 on top of 2500 against 5000 committed"
+    },
+    {
+      "seq": 106,
+      "suite": "20_financial",
+      "actual": "over_allocated/5500.00/0.00",
+      "run_at": "2026-11-07T18:35:52.678854+00:00",
+      "status": "PASS",
+      "test_id": "FIN-14",
+      "expected": "over_allocated/5500.00/0.00",
+      "check_name": "over-commitment is visible, not hidden"
+    },
+    {
+      "seq": 107,
+      "suite": "20_financial",
+      "actual": "23514 a reversal reason is required",
+      "run_at": "2026-11-07T18:35:52.680069+00:00",
+      "status": "PASS",
+      "test_id": "FIN-20",
+      "expected": "23514",
+      "check_name": "a reversal needs a reason"
+    },
+    {
+      "seq": 108,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.682902+00:00",
+      "status": "PASS",
+      "test_id": "FIN-21",
+      "expected": "ok",
+      "check_name": "reverse founder receipt 2 through the RPC"
+    },
+    {
+      "seq": 109,
+      "suite": "20_financial",
+      "actual": "true",
+      "run_at": "2026-11-07T18:35:52.683783+00:00",
+      "status": "PASS",
+      "test_id": "FIN-22",
+      "expected": "true",
+      "check_name": "its allocation was reversed with it"
+    },
+    {
+      "seq": 110,
+      "suite": "20_financial",
+      "actual": "partially_paid/10000.00",
+      "run_at": "2026-11-07T18:35:52.684606+00:00",
+      "status": "PASS",
+      "test_id": "FIN-23",
+      "expected": "partially_paid/10000.00",
+      "check_name": "commitment drops back to partially_paid immediately"
+    },
+    {
+      "seq": 111,
+      "suite": "20_financial",
+      "actual": "1",
+      "run_at": "2026-11-07T18:35:52.685191+00:00",
+      "status": "PASS",
+      "test_id": "FIN-24",
+      "expected": "1",
+      "check_name": "reversal is in the activity ledger with the cascade count"
+    },
+    {
+      "seq": 112,
+      "suite": "20_financial",
+      "actual": "23514 transaction 6f0db0c2-2da8-4feb-9055-00c5e7c32e9b is already reversed",
+      "run_at": "2026-11-07T18:35:52.68566+00:00",
+      "status": "PASS",
+      "test_id": "FIN-25",
+      "expected": "23514",
+      "check_name": "a reversed transaction cannot be reversed again"
+    },
+    {
+      "seq": 113,
+      "suite": "20_financial",
+      "actual": "23514 cannot allocate a reversed transaction",
+      "run_at": "2026-11-07T18:35:52.686273+00:00",
+      "status": "PASS",
+      "test_id": "FIN-26",
+      "expected": "23514",
+      "check_name": "a reversed transaction cannot be allocated again"
+    },
+    {
+      "seq": 114,
+      "suite": "20_financial",
+      "actual": "42501 permission denied for table transactions",
+      "run_at": "2026-11-07T18:35:52.686687+00:00",
+      "status": "PASS",
+      "test_id": "FIN-27",
+      "expected": "42501",
+      "check_name": "founder cannot edit the amount of an allocated transaction"
+    },
+    {
+      "seq": 115,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.687988+00:00",
+      "status": "PASS",
+      "test_id": "FIN-28",
+      "expected": "ok:1",
+      "check_name": "committed amount lowered to what was received"
+    },
+    {
+      "seq": 116,
+      "suite": "20_financial",
+      "actual": "fulfilled",
+      "run_at": "2026-11-07T18:35:52.688756+00:00",
+      "status": "PASS",
+      "test_id": "FIN-29",
+      "expected": "fulfilled",
+      "check_name": "status follows the new committed amount at once"
+    },
+    {
+      "seq": 117,
+      "suite": "20_financial",
+      "actual": "23514 commitment a1795525-9c23-4d4e-ba15-cae2a4bc2eb0 has received payments; reverse those allocations before revoking",
+      "run_at": "2026-11-07T18:35:52.689609+00:00",
+      "status": "PASS",
+      "test_id": "FIN-30",
+      "expected": "23514",
+      "check_name": "a commitment with received money cannot be revoked"
+    },
+    {
+      "seq": 118,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.691301+00:00",
+      "status": "PASS",
+      "test_id": "FIN-31",
+      "expected": "ok",
+      "check_name": "reverse the cofounder allocation first"
+    },
+    {
+      "seq": 119,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.692659+00:00",
+      "status": "PASS",
+      "test_id": "FIN-32",
+      "expected": "ok",
+      "check_name": "now the commitment can be revoked"
+    },
+    {
+      "seq": 120,
+      "suite": "20_financial",
+      "actual": "revoked/0.00",
+      "run_at": "2026-11-07T18:35:52.693533+00:00",
+      "status": "PASS",
+      "test_id": "FIN-33",
+      "expected": "revoked/0.00",
+      "check_name": "revoked commitment shows revoked with nothing outstanding"
+    },
+    {
+      "seq": 121,
+      "suite": "20_financial",
+      "actual": "23514 commitment a1795525-9c23-4d4e-ba15-cae2a4bc2eb0 is revoked",
+      "run_at": "2026-11-07T18:35:52.694275+00:00",
+      "status": "PASS",
+      "test_id": "FIN-34",
+      "expected": "23514",
+      "check_name": "a revoked commitment cannot receive payments"
+    },
+    {
+      "seq": 122,
+      "suite": "20_financial",
+      "actual": "23514 commitment a1795525-9c23-4d4e-ba15-cae2a4bc2eb0 is revoked and can no longer change",
+      "run_at": "2026-11-07T18:35:52.694817+00:00",
+      "status": "PASS",
+      "test_id": "FIN-35",
+      "expected": "23514",
+      "check_name": "a revoked commitment cannot be edited"
+    },
+    {
+      "seq": 123,
+      "suite": "20_financial",
+      "actual": "user/Cofounder withdrew",
+      "run_at": "2026-11-07T18:35:52.695341+00:00",
+      "status": "PASS",
+      "test_id": "FIN-36",
+      "expected": "user/Cofounder withdrew",
+      "check_name": "revocation is in the activity ledger as the founder"
+    },
+    {
+      "seq": 124,
+      "suite": "20_financial",
+      "actual": "42501 permission denied for table payment_allocations",
+      "run_at": "2026-11-07T18:35:52.695752+00:00",
+      "status": "PASS",
+      "test_id": "FIN-37",
+      "expected": "42501",
+      "check_name": "an allocation cannot be un-reversed by the founder"
+    },
+    {
+      "seq": 125,
+      "suite": "20_financial",
+      "actual": "23514 reversal of transaction 6f0db0c2-2da8-4feb-9055-00c5e7c32e9b is final",
+      "run_at": "2026-11-07T18:35:52.696384+00:00",
+      "status": "PASS",
+      "test_id": "FIN-38",
+      "expected": "23514",
+      "check_name": "even service_role cannot un-reverse a transaction"
+    },
+    {
+      "seq": 126,
+      "suite": "20_financial",
+      "actual": "23514 reversal of allocation 2a11a0a2-47c4-428e-8df6-20ad4b6b1d69 is final",
+      "run_at": "2026-11-07T18:35:52.696775+00:00",
+      "status": "PASS",
+      "test_id": "FIN-39",
+      "expected": "23514",
+      "check_name": "even service_role cannot un-reverse an allocation"
+    },
+    {
+      "seq": 127,
+      "suite": "20_financial",
+      "actual": "23514 financial fields of transaction aff714ec-ed82-4430-a451-b6a157a84ffd are immutable; reverse it and record a new transaction",
+      "run_at": "2026-11-07T18:35:52.697195+00:00",
+      "status": "PASS",
+      "test_id": "FIN-40",
+      "expected": "23514",
+      "check_name": "even service_role cannot back-date a transaction"
+    },
+    {
+      "seq": 128,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.698964+00:00",
+      "status": "PASS",
+      "test_id": "FIN-50",
+      "expected": "ok",
+      "check_name": "founder pays a business expense personally as a reimbursable expense"
+    },
+    {
+      "seq": 129,
+      "suite": "20_financial",
+      "actual": "23514 new row for relation \"transactions\" violates check constraint \"chk_tx_contribution\"",
+      "run_at": "2026-11-07T18:35:52.699488+00:00",
+      "status": "PASS",
+      "test_id": "FIN-51",
+      "expected": "23514",
+      "check_name": "a personally paid expense cannot be silently operational"
+    },
+    {
+      "seq": 130,
+      "suite": "20_financial",
+      "actual": "23514 new row for relation \"transactions\" violates check constraint \"chk_tx_contribution\"",
+      "run_at": "2026-11-07T18:35:52.70013+00:00",
+      "status": "PASS",
+      "test_id": "FIN-52",
+      "expected": "23514",
+      "check_name": "capital contribution needs a participant"
+    },
+    {
+      "seq": 131,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.702834+00:00",
+      "status": "PASS",
+      "test_id": "FIN-53",
+      "expected": "ok:1",
+      "check_name": "the business reimburses 700"
+    },
+    {
+      "seq": 132,
+      "suite": "20_financial",
+      "actual": "700.00/500.00",
+      "run_at": "2026-11-07T18:35:52.704401+00:00",
+      "status": "PASS",
+      "test_id": "FIN-54",
+      "expected": "700.00/500.00",
+      "check_name": "reimbursement outstanding 500 of 1200"
+    },
+    {
+      "seq": 133,
+      "suite": "20_financial",
+      "actual": "23514 settlement of 600.00 would exceed the outstanding 500.00 on transaction 150675ae-e3ce-4d31-868a-de9268d44e73",
+      "run_at": "2026-11-07T18:35:52.705443+00:00",
+      "status": "PASS",
+      "test_id": "FIN-55",
+      "expected": "23514",
+      "check_name": "cannot reimburse more than is owed"
+    },
+    {
+      "seq": 134,
+      "suite": "20_financial",
+      "actual": "23514 settlement participant must match the original transaction participant",
+      "run_at": "2026-11-07T18:35:52.7062+00:00",
+      "status": "PASS",
+      "test_id": "FIN-56",
+      "expected": "23514",
+      "check_name": "cannot reimburse the wrong participant"
+    },
+    {
+      "seq": 135,
+      "suite": "20_financial",
+      "actual": "23514 reimbursement cannot settle a operational transaction",
+      "run_at": "2026-11-07T18:35:52.707028+00:00",
+      "status": "PASS",
+      "test_id": "FIN-57",
+      "expected": "23514",
+      "check_name": "a reimbursement cannot settle ordinary revenue"
+    },
+    {
+      "seq": 136,
+      "suite": "20_financial",
+      "actual": "23514 reverse the reimbursements/repayments of transaction 150675ae-e3ce-4d31-868a-de9268d44e73 first",
+      "run_at": "2026-11-07T18:35:52.707614+00:00",
+      "status": "PASS",
+      "test_id": "FIN-58",
+      "expected": "23514",
+      "check_name": "a reimbursable expense with reimbursements cannot be reversed"
+    },
+    {
+      "seq": 137,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.708694+00:00",
+      "status": "PASS",
+      "test_id": "FIN-59",
+      "expected": "ok",
+      "check_name": "founder lends the business 5000"
+    },
+    {
+      "seq": 138,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.710188+00:00",
+      "status": "PASS",
+      "test_id": "FIN-60",
+      "expected": "ok:1",
+      "check_name": "the business repays 2000 of the loan"
+    },
+    {
+      "seq": 139,
+      "suite": "20_financial",
+      "actual": "60.00/11000.00/5000.00/3000.00/500.00",
+      "run_at": "2026-11-07T18:35:52.713769+00:00",
+      "status": "PASS",
+      "test_id": "FIN-61",
+      "expected": "60.00/11000.00/5000.00/3000.00/500.00",
+      "check_name": "founder summary keeps capital, loans and reimbursements separate (and equity untouched)"
+    },
+    {
+      "seq": 140,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.718227+00:00",
+      "status": "PASS",
+      "test_id": "FIN-70",
+      "expected": "ok:1",
+      "check_name": "founder allocated 300000 against the 200000 Seed target"
+    },
+    {
+      "seq": 141,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.718846+00:00",
+      "status": "PASS",
+      "test_id": "FIN-71",
+      "expected": "ok:1",
+      "check_name": "cofounder allocated 400000 at structure level"
+    },
+    {
+      "seq": 142,
+      "suite": "20_financial",
+      "actual": "23503 insert or update on table \"participant_capital_allocations\" violates foreign key constraint \"fk_pca_target\"",
+      "run_at": "2026-11-07T18:35:52.719485+00:00",
+      "status": "PASS",
+      "test_id": "FIN-72",
+      "expected": "23503",
+      "check_name": "a target from another structure is rejected by the key"
+    },
+    {
+      "seq": 143,
+      "suite": "20_financial",
+      "actual": "over_allocated/100000.00",
+      "run_at": "2026-11-07T18:35:52.720683+00:00",
+      "status": "PASS",
+      "test_id": "FIN-73",
+      "expected": "over_allocated/100000.00",
+      "check_name": "target view flags Seed over-allocated by 100000"
+    },
+    {
+      "seq": 144,
+      "suite": "20_financial",
+      "actual": "700000.00/under_allocated/100000.00/1",
+      "run_at": "2026-11-07T18:35:52.722379+00:00",
+      "status": "PASS",
+      "test_id": "FIN-74",
+      "expected": "700000.00/under_allocated/100000.00/1",
+      "check_name": "structure view: 700000 allocated, under-allocated overall, targets exceed structure by 100000, 1 target over"
+    },
+    {
+      "seq": 145,
+      "suite": "20_financial",
+      "actual": "60.00/40.00",
+      "run_at": "2026-11-07T18:35:52.72348+00:00",
+      "status": "PASS",
+      "test_id": "FIN-75",
+      "expected": "60.00/40.00",
+      "check_name": "ownership percentages are unaffected by capital allocations"
+    },
+    {
+      "seq": 146,
+      "suite": "20_financial",
+      "actual": "41300.00",
+      "run_at": "2026-11-07T18:35:52.725273+00:00",
+      "status": "PASS",
+      "test_id": "CASH-01",
+      "expected": "41300.00",
+      "check_name": "cash before the July transfer"
+    },
+    {
+      "seq": 147,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.726647+00:00",
+      "status": "PASS",
+      "test_id": "CASH-02",
+      "expected": "ok:1",
+      "check_name": "transfer bank1 -> bank2 1500"
+    },
+    {
+      "seq": 148,
+      "suite": "20_financial",
+      "actual": "0.00",
+      "run_at": "2026-11-07T18:35:52.728039+00:00",
+      "status": "PASS",
+      "test_id": "CASH-03",
+      "expected": "0.00",
+      "check_name": "an internal transfer is cash-neutral"
+    },
+    {
+      "seq": 149,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.729232+00:00",
+      "status": "PASS",
+      "test_id": "CASH-04",
+      "expected": "ok:1",
+      "check_name": "transfer bank1 -> escrow 2000"
+    },
+    {
+      "seq": 150,
+      "suite": "20_financial",
+      "actual": "-2000.00",
+      "run_at": "2026-11-07T18:35:52.730618+00:00",
+      "status": "PASS",
+      "test_id": "CASH-05",
+      "expected": "-2000.00",
+      "check_name": "moving money into escrow reduces available cash"
+    },
+    {
+      "seq": 151,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.73182+00:00",
+      "status": "PASS",
+      "test_id": "CASH-06",
+      "expected": "ok:1",
+      "check_name": "draw 1000 from the credit line"
+    },
+    {
+      "seq": 152,
+      "suite": "20_financial",
+      "actual": "1000.00",
+      "run_at": "2026-11-07T18:35:52.733229+00:00",
+      "status": "PASS",
+      "test_id": "CASH-07",
+      "expected": "1000.00",
+      "check_name": "drawing on credit adds available cash"
+    },
+    {
+      "seq": 153,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.734159+00:00",
+      "status": "PASS",
+      "test_id": "CASH-08",
+      "expected": "ok:1",
+      "check_name": "expense 800 from bank2"
+    },
+    {
+      "seq": 154,
+      "suite": "20_financial",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:35:52.735065+00:00",
+      "status": "PASS",
+      "test_id": "CASH-09",
+      "expected": "ok:1",
+      "check_name": "future-dated income 9999"
+    },
+    {
+      "seq": 155,
+      "suite": "20_financial",
+      "actual": "23514 transaction dated 2026-08-01 precedes the account opening balance date 2026-09-01",
+      "run_at": "2026-11-07T18:35:52.73561+00:00",
+      "status": "PASS",
+      "test_id": "CASH-10",
+      "expected": "23514",
+      "check_name": "a transaction before the account opened is refused"
+    },
+    {
+      "seq": 156,
+      "suite": "20_financial",
+      "actual": "23514 account 5020126a-3f3f-47a7-9166-bd0fef95bd70 is inactive",
+      "run_at": "2026-11-07T18:35:52.736188+00:00",
+      "status": "PASS",
+      "test_id": "CASH-11",
+      "expected": "23514",
+      "check_name": "a transaction on an inactive account is refused"
+    },
+    {
+      "seq": 157,
+      "suite": "20_financial",
+      "actual": "39500.00",
+      "run_at": "2026-11-07T18:35:52.737048+00:00",
+      "status": "PASS",
+      "test_id": "CASH-12",
+      "expected": "39500.00",
+      "check_name": "available cash on 2026-07-31"
+    },
+    {
+      "seq": 158,
+      "suite": "20_financial",
+      "actual": "25500.00",
+      "run_at": "2026-11-07T18:35:52.737819+00:00",
+      "status": "PASS",
+      "test_id": "CASH-13",
+      "expected": "25500.00",
+      "check_name": "available cash on 2026-05-15 (as-of date respected)"
+    },
+    {
+      "seq": 159,
+      "suite": "20_financial",
+      "actual": "0",
+      "run_at": "2026-11-07T18:35:52.738574+00:00",
+      "status": "FAIL",
+      "test_id": "CASH-14",
+      "expected": "0.00",
+      "check_name": "before any account opened there is no cash"
+    },
+    {
+      "seq": 160,
+      "suite": "20_financial",
+      "actual": "40500.00",
+      "run_at": "2026-11-07T18:35:52.73941+00:00",
+      "status": "PASS",
+      "test_id": "CASH-15",
+      "expected": "40500.00",
+      "check_name": "today (business timezone) excludes the 2099 receivable, includes bank3"
+    },
+    {
+      "seq": 161,
+      "suite": "20_financial",
+      "actual": "50499.00",
+      "run_at": "2026-11-07T18:35:52.740262+00:00",
+      "status": "PASS",
+      "test_id": "CASH-16",
+      "expected": "50499.00",
+      "check_name": "far future includes the scheduled receivable"
+    },
+    {
+      "seq": 162,
+      "suite": "20_financial",
+      "actual": "Credit line=-3000.00:false, Escrow=2000.00:false, HDFC Current=23800.00:true, ICICI Current=15200.00:true, Old bank=300.00:false, Petty cash=500.00:true",
+      "run_at": "2026-11-07T18:35:52.741596+00:00",
+      "status": "PASS",
+      "test_id": "CASH-17",
+      "expected": "Credit line=-3000.00:false, Escrow=2000.00:false, HDFC Current=23800.00:true, ICICI Current=15200.00:true, Old bank=300.00:false, Petty cash=500.00:true",
+      "check_name": "per-account balances on 2026-07-31"
+    },
+    {
+      "seq": 163,
+      "suite": "20_financial",
+      "actual": "0.00",
+      "run_at": "2026-11-07T18:35:52.742928+00:00",
+      "status": "PASS",
+      "test_id": "CASH-18",
+      "expected": "0.00",
+      "check_name": "the personally paid expense never touched business cash"
+    },
+    {
+      "seq": 164,
+      "suite": "20_financial",
+      "actual": "39500.00",
+      "run_at": "2026-11-07T18:35:52.743785+00:00",
+      "status": "PASS",
+      "test_id": "CASH-19",
+      "expected": "39500.00",
+      "check_name": "service_role gets the same figure by naming the business"
+    },
+    {
+      "seq": 165,
+      "suite": "20_financial",
+      "actual": "0.00",
+      "run_at": "2026-11-07T18:36:19.591872+00:00",
+      "status": "PASS",
+      "test_id": "CASH-14",
+      "expected": "0.00",
+      "check_name": "before any account opened there is no cash"
+    },
+    {
+      "seq": 166,
+      "suite": "20_financial",
+      "actual": "39500.00",
+      "run_at": "2026-11-07T18:36:19.593714+00:00",
+      "status": "PASS",
+      "test_id": "CASH-12",
+      "expected": "39500.00",
+      "check_name": "available cash on 2026-07-31 (unchanged by migration 9)"
+    },
+    {
+      "seq": 167,
+      "suite": "20_financial",
+      "actual": "true/false/false",
+      "run_at": "2026-11-07T18:36:19.594257+00:00",
+      "status": "PASS",
+      "test_id": "CASH-20",
+      "expected": "true/false/false",
+      "check_name": "migration 9 kept the function grants (authenticated only)"
+    },
+    {
+      "seq": 168,
+      "suite": "21_concurrency",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:37:29.475422+00:00",
+      "status": "PASS",
+      "test_id": "CONC-01",
+      "expected": "OK 1",
+      "check_name": "session 1 allocated 4000"
+    },
+    {
+      "seq": 169,
+      "suite": "21_concurrency",
+      "actual": "s1 18:37:08.763..18:37:14.777 | s2 18:37:18.532..18:37:18.538",
+      "run_at": "2026-11-07T18:37:29.480175+00:00",
+      "status": "FAIL",
+      "test_id": "CONC-02",
+      "expected": "s2 ends after s1 commit",
+      "check_name": "session 2 waited for session 1 to commit (row lock)"
+    },
+    {
+      "seq": 170,
+      "suite": "21_concurrency",
+      "actual": "23514 allocations (8000.00) would exceed the transaction amount (5000.00)",
+      "run_at": "2026-11-07T18:37:29.480477+00:00",
+      "status": "PASS",
+      "test_id": "CONC-03",
+      "expected": "23514 would exceed",
+      "check_name": "session 2 re-checked after the lock and was refused"
+    },
+    {
+      "seq": 171,
+      "suite": "21_concurrency",
+      "actual": "1/4000.00",
+      "run_at": "2026-11-07T18:37:29.482462+00:00",
+      "status": "PASS",
+      "test_id": "CONC-04",
+      "expected": "1/4000.00",
+      "check_name": "exactly one 4000 allocation exists on the receipt"
+    },
+    {
+      "seq": 172,
+      "suite": "21_concurrency",
+      "actual": "The MCP connector executed the two sessions sequentially (no overlap), so lock contention was NOT exercised. CONC-03 only proves the sequential over-allocation check. Real concurrency moved to tests/http (parallel PostgREST requests, run by the founder). Same FOR UPDATE pattern passed a true two-session test in Rev 2.2 (historical evidence).",
+      "run_at": "2026-11-07T18:37:45.901644+00:00",
+      "status": "INFO",
+      "test_id": "CONC-02-NOTE",
+      "expected": null,
+      "check_name": "environment limitation, not a product result"
+    },
+    {
+      "seq": 192,
+      "suite": "30_csv_import",
+      "actual": "ok",
+      "run_at": "2026-11-07T18:40:32.899168+00:00",
+      "status": "PASS",
+      "test_id": "CSV-SETUP",
+      "expected": "ok",
+      "check_name": "batch staged by the founder through RLS"
+    },
+    {
+      "seq": 193,
+      "suite": "30_csv_import",
+      "actual": "2026-08-03 1200.50 expense AWS August | 2026-08-04 300.00 income Stripe payout",
+      "run_at": "2026-11-07T18:40:32.901174+00:00",
+      "status": "PASS",
+      "test_id": "CSV-01",
+      "expected": "2026-08-03 1200.50 expense AWS August | 2026-08-04 300.00 income Stripe payout",
+      "check_name": "server parsed the valid rows"
+    },
+    {
+      "seq": 194,
+      "suite": "30_csv_import",
+      "actual": "2:true,3:true",
+      "run_at": "2026-11-07T18:40:32.901891+00:00",
+      "status": "PASS",
+      "test_id": "CSV-02",
+      "expected": "2:true,3:true",
+      "check_name": "invalid rows carry a validation error"
+    },
+    {
+      "seq": 195,
+      "suite": "30_csv_import",
+      "actual": "true",
+      "run_at": "2026-11-07T18:40:32.902512+00:00",
+      "status": "PASS",
+      "test_id": "CSV-03",
+      "expected": "true",
+      "check_name": "row 4 is flagged as a duplicate of the existing invoice transaction"
+    },
+    {
+      "seq": 196,
+      "suite": "30_csv_import",
+      "actual": "23514 import batch aec3b7b7-1e4f-4aaf-a6bc-7a62c40c7d0e has invalid rows; fix the file or mark them skip",
+      "run_at": "2026-11-07T18:40:32.904927+00:00",
+      "status": "PASS",
+      "test_id": "CSV-04",
+      "expected": "23514",
+      "check_name": "commit refused while invalid rows are not skipped"
+    },
+    {
+      "seq": 197,
+      "suite": "30_csv_import",
+      "actual": "OK 2",
+      "run_at": "2026-11-07T18:40:32.906442+00:00",
+      "status": "PASS",
+      "test_id": "CSV-05",
+      "expected": "ok:2",
+      "check_name": "founder marks the invalid rows skip"
+    },
+    {
+      "seq": 198,
+      "suite": "30_csv_import",
+      "actual": "23514 import batch aec3b7b7-1e4f-4aaf-a6bc-7a62c40c7d0e has suspected duplicates without a decision (import, skip or replace)",
+      "run_at": "2026-11-07T18:40:32.908034+00:00",
+      "status": "PASS",
+      "test_id": "CSV-06",
+      "expected": "23514",
+      "check_name": "commit refused while suspected duplicates have no decision"
+    },
+    {
+      "seq": 199,
+      "suite": "30_csv_import",
+      "actual": "staged/0",
+      "run_at": "2026-11-07T18:40:32.908998+00:00",
+      "status": "PASS",
+      "test_id": "CSV-07",
+      "expected": "staged/0",
+      "check_name": "a refused commit changed nothing"
+    },
+    {
+      "seq": 200,
+      "suite": "30_csv_import",
+      "actual": "OK 2",
+      "run_at": "2026-11-07T18:40:32.910408+00:00",
+      "status": "PASS",
+      "test_id": "CSV-08",
+      "expected": "ok:2",
+      "check_name": "founder: row 4 is the same invoice (skip), row 5 is a genuine second charge (import)"
+    },
+    {
+      "seq": 201,
+      "suite": "30_csv_import",
+      "actual": "3/3",
+      "run_at": "2026-11-07T18:40:32.917968+00:00",
+      "status": "PASS",
+      "test_id": "CSV-09",
+      "expected": "3/3",
+      "check_name": "commit succeeds: 3 imported, 3 skipped"
+    },
+    {
+      "seq": 202,
+      "suite": "30_csv_import",
+      "actual": "3",
+      "run_at": "2026-11-07T18:40:32.918485+00:00",
+      "status": "PASS",
+      "test_id": "CSV-10",
+      "expected": "3",
+      "check_name": "imported transactions carry batch provenance"
+    },
+    {
+      "seq": 203,
+      "suite": "30_csv_import",
+      "actual": "true",
+      "run_at": "2026-11-07T18:40:32.918923+00:00",
+      "status": "PASS",
+      "test_id": "CSV-11",
+      "expected": "true",
+      "check_name": "in-batch duplicate (row 5 vs row 0) was detected"
+    },
+    {
+      "seq": 204,
+      "suite": "30_csv_import",
+      "actual": "3",
+      "run_at": "2026-11-07T18:40:32.919488+00:00",
+      "status": "PASS",
+      "test_id": "CSV-12",
+      "expected": "3",
+      "check_name": "import is in the activity ledger"
+    },
+    {
+      "seq": 205,
+      "suite": "30_csv_import",
+      "actual": "23514 import batch aec3b7b7-1e4f-4aaf-a6bc-7a62c40c7d0e is already committed",
+      "run_at": "2026-11-07T18:40:32.919993+00:00",
+      "status": "PASS",
+      "test_id": "CSV-13",
+      "expected": "23514",
+      "check_name": "committing twice is refused"
+    },
+    {
+      "seq": 206,
+      "suite": "30_csv_import",
+      "actual": "42501 committed import batch aec3b7b7-1e4f-4aaf-a6bc-7a62c40c7d0e is permanent provenance",
+      "run_at": "2026-11-07T18:40:32.920501+00:00",
+      "status": "PASS",
+      "test_id": "CSV-14",
+      "expected": "42501",
+      "check_name": "a committed batch cannot be deleted"
+    },
+    {
+      "seq": 207,
+      "suite": "30_csv_import",
+      "actual": "42501 rows of a committed import batch are permanent provenance",
+      "run_at": "2026-11-07T18:40:32.921451+00:00",
+      "status": "PASS",
+      "test_id": "CSV-15",
+      "expected": "42501",
+      "check_name": "rows of a committed batch cannot be deleted"
+    },
+    {
+      "seq": 208,
+      "suite": "30_csv_import",
+      "actual": "23514 import batch aec3b7b7-1e4f-4aaf-a6bc-7a62c40c7d0e is already committed",
+      "run_at": "2026-11-07T18:40:32.922089+00:00",
+      "status": "PASS",
+      "test_id": "CSV-16",
+      "expected": "23514",
+      "check_name": "rows cannot be added to a committed batch"
+    },
+    {
+      "seq": 209,
+      "suite": "30_csv_import",
+      "actual": "23514 import batch aec3b7b7-1e4f-4aaf-a6bc-7a62c40c7d0e is already committed",
+      "run_at": "2026-11-07T18:40:32.922785+00:00",
+      "status": "PASS",
+      "test_id": "CSV-17",
+      "expected": "23514",
+      "check_name": "decisions on a committed batch cannot change"
+    },
+    {
+      "seq": 210,
+      "suite": "30_csv_import",
+      "actual": "23505 this file (sha256 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa) was already imported into this account",
+      "run_at": "2026-11-07T18:40:32.926073+00:00",
+      "status": "PASS",
+      "test_id": "CSV-20",
+      "expected": "23505",
+      "check_name": "the same file (sha256) cannot be imported twice into one account"
+    },
+    {
+      "seq": 211,
+      "suite": "30_csv_import",
+      "actual": "23514 row 0: the replaced transaction belongs to another account",
+      "run_at": "2026-11-07T18:40:32.93011+00:00",
+      "status": "PASS",
+      "test_id": "CSV-21",
+      "expected": "23514",
+      "check_name": "replace refused: target is other account"
+    },
+    {
+      "seq": 212,
+      "suite": "30_csv_import",
+      "actual": "23514 row 0: only ordinary income/expense can be replaced from a CSV; edit operational records by reversal",
+      "run_at": "2026-11-07T18:40:32.933377+00:00",
+      "status": "PASS",
+      "test_id": "CSV-22",
+      "expected": "23514",
+      "check_name": "replace refused: target is transfer"
+    },
+    {
+      "seq": 213,
+      "suite": "30_csv_import",
+      "actual": "23514 row 0: only ordinary income/expense can be replaced from a CSV; edit capital_contribution records by reversal",
+      "run_at": "2026-11-07T18:40:32.936602+00:00",
+      "status": "PASS",
+      "test_id": "CSV-23",
+      "expected": "23514",
+      "check_name": "replace refused: target is capital contribution"
+    },
+    {
+      "seq": 214,
+      "suite": "30_csv_import",
+      "actual": "23514 row 0: the replaced transaction is already reversed",
+      "run_at": "2026-11-07T18:40:32.93965+00:00",
+      "status": "PASS",
+      "test_id": "CSV-24",
+      "expected": "23514",
+      "check_name": "replace refused: target is already reversed"
+    },
+    {
+      "seq": 215,
+      "suite": "30_csv_import",
+      "actual": "23514 two rows replace the same transaction",
+      "run_at": "2026-11-07T18:40:32.950285+00:00",
+      "status": "PASS",
+      "test_id": "CSV-25",
+      "expected": "23514",
+      "check_name": "two rows cannot replace the same transaction"
+    },
+    {
+      "seq": 216,
+      "suite": "30_csv_import",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:40:32.957328+00:00",
+      "status": "PASS",
+      "test_id": "CSV-26",
+      "expected": "ok",
+      "check_name": "a valid replacement commits"
+    },
+    {
+      "seq": 217,
+      "suite": "30_csv_import",
+      "actual": "true/true",
+      "run_at": "2026-11-07T18:40:32.957854+00:00",
+      "status": "PASS",
+      "test_id": "CSV-27",
+      "expected": "true/true",
+      "check_name": "the replaced transaction is reversed with a traceable reason"
+    },
+    {
+      "seq": 218,
+      "suite": "30_csv_import",
+      "actual": "540.00",
+      "run_at": "2026-11-07T18:40:32.958398+00:00",
+      "status": "PASS",
+      "test_id": "CSV-28",
+      "expected": "540.00",
+      "check_name": "the replacement points back at what it replaced"
+    },
+    {
+      "seq": 219,
+      "suite": "30_csv_import",
+      "actual": "23514 transaction dated 2026-03-01 precedes the account opening balance date 2026-04-01",
+      "run_at": "2026-11-07T18:40:32.961786+00:00",
+      "status": "PASS",
+      "test_id": "CSV-29",
+      "expected": "23514",
+      "check_name": "one bad row aborts the whole commit"
+    },
+    {
+      "seq": 220,
+      "suite": "30_csv_import",
+      "actual": "staged/0/0",
+      "run_at": "2026-11-07T18:40:32.963014+00:00",
+      "status": "PASS",
+      "test_id": "CSV-30",
+      "expected": "staged/0/0",
+      "check_name": "nothing from the aborted batch was written"
+    },
+    {
+      "seq": 221,
+      "suite": "30_csv_import",
+      "actual": "P0002 import batch cb076223-cc48-4a9f-9831-b68999085e1a not found",
+      "run_at": "2026-11-07T18:40:32.963578+00:00",
+      "status": "PASS",
+      "test_id": "CSV-31",
+      "expected": "P0002",
+      "check_name": "founder B cannot commit A's batch"
+    },
+    {
+      "seq": 222,
+      "suite": "30_csv_import",
+      "actual": "23503 import batch cb076223-cc48-4a9f-9831-b68999085e1a not found",
+      "run_at": "2026-11-07T18:40:32.964234+00:00",
+      "status": "PASS",
+      "test_id": "CSV-32",
+      "expected": "err",
+      "check_name": "founder B cannot stage rows into A's batch"
+    },
+    {
+      "seq": 223,
+      "suite": "40_gap_checks",
+      "test_id": "GAP-01",
+      "check_name": "a transfer dated before the destination account opened is refused (G-13)",
+      "status": "PASS",
+      "expected": "23514%destination opening%",
+      "actual": "23514 transfer dated 2026-03-01 precedes the destination opening balance date 2026-06-01",
+      "run_at": "2026-11-07T18:55:02Z"
+    },
+    {
+      "seq": 224,
+      "suite": "40_gap_checks",
+      "test_id": "GAP-02",
+      "check_name": "the same transfer on or after both opening dates is accepted",
+      "status": "PASS",
+      "expected": "OK 1",
+      "actual": "OK 1",
+      "run_at": "2026-11-07T18:55:02Z"
+    },
+    {
+      "seq": 225,
+      "suite": "40_gap_checks",
+      "test_id": "GAP-03",
+      "check_name": "the transfer is cash-neutral across the two accounts",
+      "status": "PASS",
+      "expected": "1000.00",
+      "actual": "1000.00",
+      "run_at": "2026-11-07T18:55:02Z"
+    },
+    {
+      "seq": 226,
+      "suite": "40_gap_checks",
+      "test_id": "GAP-04",
+      "check_name": "revoking a commitment with a NULL reason is refused (G-16)",
+      "status": "PASS",
+      "expected": "23514%reason is required%",
+      "actual": "23514 a revocation reason is required",
+      "run_at": "2026-11-07T18:55:02Z"
+    },
+    {
+      "seq": 227,
+      "suite": "40_gap_checks",
+      "test_id": "GAP-05",
+      "check_name": "revoking a commitment with a blank reason is refused (G-16)",
+      "status": "PASS",
+      "expected": "23514%reason is required%",
+      "actual": "23514 a revocation reason is required",
+      "run_at": "2026-11-07T18:55:02Z"
+    },
+    {
+      "seq": 228,
+      "suite": "40_gap_checks",
+      "test_id": "GAP-06",
+      "check_name": "the commitment is still pledged after both refusals",
+      "status": "PASS",
+      "expected": "pledged",
+      "actual": "pledged",
+      "run_at": "2026-11-07T18:55:02Z"
+    }
+  ]
+}

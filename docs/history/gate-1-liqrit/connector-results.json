@@ -1,0 +1,298 @@
+{
+    "suite": "connector",
+    "php": "8.2.12",
+    "os": "Windows",
+    "ran_at": "2026-11-07T18:45:39+00:00",
+    "summary": {
+        "PASS": 41
+    },
+    "results": [
+        {
+            "test_id": "CON-01",
+            "description": "plain HTTP without a trusted HTTPS marker is refused",
+            "status": "PASS",
+            "expected": "403",
+            "actual": "403 {\"error\":\"HTTPS is required\"}"
+        },
+        {
+            "test_id": "CON-02",
+            "description": "method other than PUT/GET/DELETE is refused",
+            "status": "PASS",
+            "expected": "405",
+            "actual": "405 {\"error\":\"method not allowed\"}"
+        },
+        {
+            "test_id": "CON-03",
+            "description": "signed upload succeeds",
+            "status": "PASS",
+            "expected": "201",
+            "actual": "201 {\"key\":\"legal/mou-v1.pdf\",\"size\":200000,\"sha256\":\"cf7d32bf8960d9b1761a5ae3565ffd82a124615ba1fef81e207aee75460d556b\"}"
+        },
+        {
+            "test_id": "CON-04",
+            "description": "upload response reports the body sha256",
+            "status": "PASS",
+            "expected": "cf7d32bf8960d9b1761a5ae3565ffd82a124615ba1fef81e207aee75460d556b",
+            "actual": "cf7d32bf8960d9b1761a5ae3565ffd82a124615ba1fef81e207aee75460d556b"
+        },
+        {
+            "test_id": "CON-05",
+            "description": "stored bytes equal the uploaded bytes",
+            "status": "PASS",
+            "expected": "identical",
+            "actual": "file present"
+        },
+        {
+            "test_id": "CON-06",
+            "description": "download returns identical bytes",
+            "status": "PASS",
+            "expected": "200 + same sha",
+            "actual": "200 cf7d32bf8960"
+        },
+        {
+            "test_id": "CON-07",
+            "description": "download carries X-Meridian-Content-SHA256",
+            "status": "PASS",
+            "expected": "header present",
+            "actual": "present"
+        },
+        {
+            "test_id": "CON-08",
+            "description": "overwrite of an existing key is refused",
+            "status": "PASS",
+            "expected": "409",
+            "actual": "409 {\"error\":\"object already exists; store new versions under a new key\"}"
+        },
+        {
+            "test_id": "CON-09",
+            "description": "body that does not match the signed sha256 is rejected",
+            "status": "PASS",
+            "expected": "422",
+            "actual": "422 {\"error\":\"body does not match X-Meridian-Content-SHA256\"}"
+        },
+        {
+            "test_id": "CON-10",
+            "description": "rejected upload leaves no file and no temp file",
+            "status": "PASS",
+            "expected": "nothing",
+            "actual": "mou-v1.pdf"
+        },
+        {
+            "test_id": "CON-11",
+            "description": "first use of a nonce is accepted",
+            "status": "PASS",
+            "expected": "200",
+            "actual": "200 200000 bytes"
+        },
+        {
+            "test_id": "CON-12",
+            "description": "replayed nonce is refused",
+            "status": "PASS",
+            "expected": "401",
+            "actual": "401 {\"error\":\"replayed request\"}"
+        },
+        {
+            "test_id": "CON-13",
+            "description": "timestamp 301 s old is refused",
+            "status": "PASS",
+            "expected": "401",
+            "actual": "401 {\"error\":\"request timestamp outside the allowed window\"}"
+        },
+        {
+            "test_id": "CON-14",
+            "description": "timestamp 301 s in the future is refused",
+            "status": "PASS",
+            "expected": "401",
+            "actual": "401 {\"error\":\"request timestamp outside the allowed window\"}"
+        },
+        {
+            "test_id": "CON-15",
+            "description": "wrong signature is refused",
+            "status": "PASS",
+            "expected": "401",
+            "actual": "401 {\"error\":\"invalid signature\"}"
+        },
+        {
+            "test_id": "CON-16",
+            "description": "signature for another path is refused",
+            "status": "PASS",
+            "expected": "401",
+            "actual": "401 {\"error\":\"invalid signature\"}"
+        },
+        {
+            "test_id": "CON-17",
+            "description": "unknown key id is refused",
+            "status": "PASS",
+            "expected": "401",
+            "actual": "401 {\"error\":\"unknown or inactive key\"}"
+        },
+        {
+            "test_id": "CON-18",
+            "description": "deactivated (rotated-out) key is refused",
+            "status": "PASS",
+            "expected": "401",
+            "actual": "401 {\"error\":\"unknown or inactive key\"}"
+        },
+        {
+            "test_id": "CON-19",
+            "description": "second active key works during rotation",
+            "status": "PASS",
+            "expected": "200",
+            "actual": "200 200000 bytes"
+        },
+        {
+            "test_id": "CON-20",
+            "description": "read-only key cannot upload",
+            "status": "PASS",
+            "expected": "403",
+            "actual": "403 {\"error\":\"key lacks the write scope\"}"
+        },
+        {
+            "test_id": "CON-21",
+            "description": "read-only key cannot delete",
+            "status": "PASS",
+            "expected": "403",
+            "actual": "403 {\"error\":\"key lacks the delete scope\"}"
+        },
+        {
+            "test_id": "CON-22",
+            "description": "read-only key can download",
+            "status": "PASS",
+            "expected": "200",
+            "actual": "200 200000 bytes"
+        },
+        {
+            "test_id": "CON-23",
+            "description": "key for another business cannot read this business",
+            "status": "PASS",
+            "expected": "403",
+            "actual": "403 {\"error\":\"key is not valid for this business\"}"
+        },
+        {
+            "test_id": "CON-24",
+            "description": "key for another business cannot write here",
+            "status": "PASS",
+            "expected": "403",
+            "actual": "403 {\"error\":\"key is not valid for this business\"}"
+        },
+        {
+            "test_id": "CON-25",
+            "description": "path rejected: dot-dot segment",
+            "status": "PASS",
+            "expected": "400",
+            "actual": "400 {\"error\":\"invalid object path\"}"
+        },
+        {
+            "test_id": "CON-26",
+            "description": "path rejected: percent-encoded traversal",
+            "status": "PASS",
+            "expected": "400",
+            "actual": "400 {\"error\":\"invalid object path\"}"
+        },
+        {
+            "test_id": "CON-27",
+            "description": "path rejected: backslash",
+            "status": "PASS",
+            "expected": "400",
+            "actual": "400 {\"error\":\"invalid object path\"}"
+        },
+        {
+            "test_id": "CON-28",
+            "description": "path rejected: hidden file segment",
+            "status": "PASS",
+            "expected": "400",
+            "actual": "400 {\"error\":\"invalid object path\"}"
+        },
+        {
+            "test_id": "CON-29",
+            "description": "path rejected: empty segment",
+            "status": "PASS",
+            "expected": "400",
+            "actual": "400 {\"error\":\"invalid object path\"}"
+        },
+        {
+            "test_id": "CON-30",
+            "description": "path rejected: business id that is not a uuid",
+            "status": "PASS",
+            "expected": "400",
+            "actual": "400 {\"error\":\"invalid object path\"}"
+        },
+        {
+            "test_id": "CON-31",
+            "description": "path rejected: trailing dot (Windows alias)",
+            "status": "PASS",
+            "expected": "400",
+            "actual": "400 {\"error\":\"invalid object path\"}"
+        },
+        {
+            "test_id": "CON-32",
+            "description": "path rejected: too many segments",
+            "status": "PASS",
+            "expected": "400",
+            "actual": "400 {\"error\":\"invalid object path\"}"
+        },
+        {
+            "test_id": "CON-33",
+            "description": "upload above max_bytes is refused",
+            "status": "PASS",
+            "expected": "413",
+            "actual": "413 {\"error\":\"file exceeds the size limit\"}"
+        },
+        {
+            "test_id": "CON-34",
+            "description": "oversize upload leaves nothing behind",
+            "status": "PASS",
+            "expected": "nothing",
+            "actual": "checked"
+        },
+        {
+            "test_id": "CON-35",
+            "description": "read through a planted directory symlink is refused",
+            "status": "PASS",
+            "expected": "403",
+            "actual": "403 {\"error\":\"path not permitted\"}"
+        },
+        {
+            "test_id": "CON-36",
+            "description": "write through a planted directory symlink is refused",
+            "status": "PASS",
+            "expected": "403",
+            "actual": "403 {\"error\":\"path not permitted\"}"
+        },
+        {
+            "test_id": "CON-37",
+            "description": "nothing was written outside the vault",
+            "status": "PASS",
+            "expected": "absent",
+            "actual": "absent"
+        },
+        {
+            "test_id": "CON-38",
+            "description": "signed delete succeeds",
+            "status": "PASS",
+            "expected": "204",
+            "actual": "204 0 bytes"
+        },
+        {
+            "test_id": "CON-39",
+            "description": "deleted object is gone",
+            "status": "PASS",
+            "expected": "404",
+            "actual": "404 {\"error\":\"not found\"}"
+        },
+        {
+            "test_id": "CON-40",
+            "description": "delete of a missing object is 404",
+            "status": "PASS",
+            "expected": "404",
+            "actual": "404 {\"error\":\"not found\"}"
+        },
+        {
+            "test_id": "CON-41",
+            "description": "GET with a body is refused",
+            "status": "PASS",
+            "expected": "400",
+            "actual": "400 {\"error\":\"unexpected request body\"}"
+        }
+    ]
+}

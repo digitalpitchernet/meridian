@@ -2,7 +2,7 @@
     "suite": "connector",
     "php": "8.2.12",
     "os": "Windows",
-    "ran_at": "2026-11-07T18:45:39+00:00",
+    "ran_at": "2026-11-07T19:29:41+00:00",
     "summary": {
         "PASS": 41
     },
@@ -26,14 +26,14 @@
             "description": "signed upload succeeds",
             "status": "PASS",
             "expected": "201",
-            "actual": "201 {\"key\":\"legal/mou-v1.pdf\",\"size\":200000,\"sha256\":\"cf7d32bf8960d9b1761a5ae3565ffd82a124615ba1fef81e207aee75460d556b\"}"
+            "actual": "201 {\"key\":\"legal/mou-v1.pdf\",\"size\":200000,\"sha256\":\"c7fe5dab69890eb60657430f9650599469067610e508e913963660a9338477bc\"}"
         },
         {
             "test_id": "CON-04",
             "description": "upload response reports the body sha256",
             "status": "PASS",
-            "expected": "cf7d32bf8960d9b1761a5ae3565ffd82a124615ba1fef81e207aee75460d556b",
-            "actual": "cf7d32bf8960d9b1761a5ae3565ffd82a124615ba1fef81e207aee75460d556b"
+            "expected": "c7fe5dab69890eb60657430f9650599469067610e508e913963660a9338477bc",
+            "actual": "c7fe5dab69890eb60657430f9650599469067610e508e913963660a9338477bc"
         },
         {
             "test_id": "CON-05",
@@ -47,7 +47,7 @@
             "description": "download returns identical bytes",
             "status": "PASS",
             "expected": "200 + same sha",
-            "actual": "200 cf7d32bf8960"
+            "actual": "200 c7fe5dab6989"
         },
         {
             "test_id": "CON-07",

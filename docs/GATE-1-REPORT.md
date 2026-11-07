@@ -1,8 +1,11 @@
 # Meridian Gate 1 Report (Rev 2.3.4 engineering foundation)
 
 Date: 8 Nov 2026. Repo: `C:\xampp\htdocs\meridian`, local commits only.
-Validation environment: Supabase project `meridian-g1-validation` (ref `xpuhrahnndjfcpatarbv`, ap-south-1, LiqrIt org, free plan),
-created fresh for Gate 1. The paused Rev 2.2 project (`cnelrrpmnbhylhivyybs`) was not touched.
+Validation environment: **DPN** Supabase project `meridian-g1-validation` (ref `ahphlozxsgifgwbtwoqb`, ap-south-1), created empty by the
+founder on 8 Nov 2026. All 9 migrations were applied unchanged (each stored statement's MD5 equals its repo file) and the full validation
+was re-run there. The first run, in the LiqrIt org (`xpuhrahnndjfcpatarbv`), is superseded by founder direction; LiqrIt is no longer used
+for Meridian, and that run's files are in `docs/history/gate-1-liqrit/` only as the record of the defects it found.
+The paused Rev 2.2 project (`cnelrrpmnbhylhivyybs`) was not touched.
 
 ## 1. Readiness assessment
 
@@ -10,12 +13,12 @@ created fresh for Gate 1. The paused Rev 2.2 project (`cnelrrpmnbhylhivyybs`) wa
 
 | Criterion | State |
 |---|---|
-| Migrations succeed | **Met.** 9 migrations applied in order on a fresh project |
+| Migrations succeed | **Met.** 9 migrations applied in order on the fresh DPN project; history versions equal the filenames |
 | Security and isolation tests pass | **Met at SQL level** (80/80). **HTTP level pending**: `tests/http/run.mjs` is written, needs your service key |
 | Financial tests pass | **Met** (74 finance and cash + 31 CSV + 6 gap checks). True parallel allocation is **pending** (HTTP suite, H-CONC-01) |
 | Storage tests pass | **Met** for SQL storage policies (SEC-STO) and the connector (41/41). **Storage API over HTTP pending** (H-STO) |
-| Recovery shown in a clean environment | **Pending.** Drill is scripted; the clean target project needs your OK on the $0 quote, then your DB URLs |
-| Defects resolved or documented | **Met.** 3 defects found in Gate 1, all fixed (§4); limitations in §7 |
+| Recovery shown in a clean environment | **Pending.** Drill is scripted; it needs a second empty DPN project and your DB URLs |
+| Defects resolved or documented | **Met.** 3 defects found in the first run, all fixed (§4); none found in the DPN run; limitations in §7 |
 | Reproducible by another developer | **Met in design**: the drill rebuilds a project from repo files alone with psql. It becomes evidence once the drill runs |
 
 When the HTTP suite and the drill both pass, I'd call Gate 1 complete and ask you for Gate 2 approval. Nothing from Gate 2 has started.
@@ -35,16 +38,16 @@ When the HTTP suite and the drill both pass, I'd call Gate 1 complete and ask yo
 
 ## 3. Validation results
 
-The latest result per test id counts. Earlier failing rows are kept in `evidence/sql-results.json` as evidence.
+One clean pass on the fresh DPN project; every test ran once (`evidence/sql-results.json`, 205 rows).
 
 | Suite | Ran where | PASS | FAIL | INFO | Pending |
 |---|---|---|---|---|---|
-| 01 fixtures and onboarding | fresh project, SQL | 8 | 0 | 0 | |
-| 10 security | fresh project, SQL | 80 | 0 | 1 | |
-| 20 finance and cash | fresh project, SQL | 74 | 0 | 0 | |
-| 21 concurrency | fresh project, SQL | 3 | 1 ¹ | 1 | moved to HTTP |
-| 30 CSV import | fresh project, SQL | 31 | 0 | 0 | |
-| 40 gap checks | fresh project, SQL | 6 | 0 | 0 | |
+| 01 fixtures and onboarding | DPN project, SQL | 8 | 0 | 0 | |
+| 10 security | DPN project, SQL | 80 | 0 | 1 | |
+| 20 finance and cash | DPN project, SQL | 74 | 0 | 0 | |
+| 21 concurrency | DPN project, SQL | 3 | 1 ¹ | 1 | moved to HTTP |
+| 30 CSV import | DPN project, SQL | 31 | 0 | 0 | |
+| 40 gap checks | DPN project, SQL | 6 | 0 | 0 | |
 | Connector | local php -S, Windows, PHP 8.2.12 | 41 | 0 | 0 | Linux symlink, real TLS |
 | HTTP (PostgREST, Storage API, service role, parallel races) | hosted | | | | **46 checks, you run** |
 | Recovery drill | hosted, clean project | | | | **13 steps, you run** |
@@ -58,6 +61,8 @@ Rev 2.2 (FIN-02). H-CONC-01 runs 10 real parallel races over HTTP.
 Security advisor after all migrations: no unexpected findings (`evidence/advisor-security.md`).
 
 ## 4. Defects found and fixed during Gate 1
+
+All three were found in the first (LiqrIt) run and fixed by forward migrations or code before the DPN run, which found none.
 
 | Found by | Defect | Fix | Re-test |
 |---|---|---|---|
@@ -168,10 +173,10 @@ Categories: **H** Previously supported by historical evidence (Rev 2.2) · **R**
 7. **Vault documents are archive-only**; file deletion is server-only.
 8. **Base currency cannot be changed** after onboarding, by anyone.
 9. **CSV duplicate decisions take two steps** (stage, then decide skip/import/replace, then commit), not one.
-10. **The validation and recovery projects are in the LiqrIt org** (free), not DigitalPitcherNetworks.
+10. ~~Validation environment owner~~: **decided 8 Nov 2026**: Meridian infrastructure is DPN-owned; LiqrIt is not used.
 11. **`max_workspaces` = 1 by default**; the validation project uses 2 for tenant tests.
 12. **Reversals are not dated** (L1).
 13. **Vault MIME allow-list**: none today. Allow-list or open?
 14. **Leaked-password protection** in Supabase Auth (plan-dependent).
 15. **Recovery targets**: what recovery point and recovery time are acceptable.
-16. **Create `meridian-g1-recovery`** (free plan, quoted $0/month) for the drill.
+16. **A second, empty DPN project** as the recovery-drill target (created by the founder, like the validation project).

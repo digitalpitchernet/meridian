@@ -20,8 +20,7 @@ const USERS = {
   b: { id: '00000000-0000-4000-8000-0000000000b2', email: 'founder.b@meridian.test' },
   c: { id: '00000000-0000-4000-8000-0000000000c3', email: 'stranger.c@meridian.test' },
 };
-const BIZ_A = '3dbab4a5-bd5d-4d1c-a6a6-639bbebd4853', BIZ_B = '40458d24-cfad-4fc5-9a01-b38447b8ad62';
-const ACCT_A = 'e175c620-5da5-409d-bf91-9d19453a7021'; // 'Bridge escrow-free account' from 21_concurrency part 1
+let BIZ_A, BIZ_B, ACCT_A; // resolved from the SQL fixtures after sign-in, so any fresh project works
 const RUN = new Date().toISOString().replace(/\D/g, '').slice(0, 14) + '-' + randomBytes(3).toString('hex');
 const sha = b => createHash('sha256').update(b).digest('hex');
 
@@ -62,6 +61,10 @@ for (const [k, u] of Object.entries(USERS)) {
   record(`H-AUTH-0${Object.keys(tokens).length}`, `user ${k} signs in through GoTrue`, up.status === 200 && !!tokens[k], '200 + token', `${up.status}/${si.status}`);
 }
 if (!tokens.a || !tokens.b) { console.error('sign-in failed; stopping'); process.exit(1); }
+const owned = async u => (await rest('service', 'GET', `businesses?select=id&created_by_user_id=eq.${u}`)).json?.[0]?.id;
+BIZ_A = await owned(USERS.a.id); BIZ_B = await owned(USERS.b.id);
+ACCT_A = (await rest('service', 'GET', `financial_accounts?select=id&business_id=eq.${BIZ_A}&name=eq.${encodeURIComponent('Bridge escrow-free account')}`)).json?.[0]?.id;
+if (!BIZ_A || !BIZ_B || !ACCT_A) { console.error('fixtures missing: run tests/sql 00, 01 and 21 part 1 first'); process.exit(1); }
 
 // ---- anon ----
 record('H-ANON-01', 'anon cannot read businesses', emptyOrDenied(await rest('anon', 'GET', 'businesses?select=id')), 'denied or []', brief(await rest('anon', 'GET', 'businesses?select=id')));
