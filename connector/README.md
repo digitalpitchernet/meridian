@@ -52,7 +52,7 @@ a new version goes under a new key. Responses: 201 upload, 200 download (with th
 | Config | `config.php` above `public_html`; point `MERIDIAN_CONNECTOR_CONFIG` at it with `SetEnv` in `.htaccess` if the host allows, otherwise next to the script with `.htaccess` denying it. | Outside the web root, set in the FPM pool: `env[MERIDIAN_CONNECTOR_CONFIG] = /etc/meridian/connector.php`. |
 | Body size | Check `upload_max_filesize`, `post_max_size` and any host request limit are at least 50 MB. | Set `client_max_body_size 51m;` (nginx) and the PHP limits. |
 | Behind a proxy | Leave `trust_forwarded_proto` false. | Only set it true when your own proxy terminates TLS and overwrites `X-Forwarded-Proto`. |
-| Backups | Host backups may lag; Meridian's recovery drill copies files and re-checks every sha256. | Snapshot the storage root and the nonce DB is not needed in backups. |
+| Backups | Host backups may lag; Meridian's recovery drill copies files and re-checks every sha256. | Snapshot the storage root. The nonce DB does not need backing up. |
 
 **FTP is not a storage API.** FTP/SFTP is how the founder uploads this script to the host. Meridian
 never stores or reads vault files over FTP: there is no per-request authentication, no integrity
