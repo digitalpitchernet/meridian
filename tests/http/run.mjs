@@ -40,7 +40,7 @@ async function call(who, method, path, body, extra = {}) {
   const buf = new Uint8Array(await res.arrayBuffer());
   let json = null;
   try { json = JSON.parse(new TextDecoder().decode(buf)); } catch { /* binary */ }
-  return { status: res.status, json, buf };
+  return { status: res.status, json, buf, headers: res.headers };
 }
 const rest = (who, method, path, body, extra) => call(who, method, '/rest/v1/' + path, body, { Prefer: 'return=representation', ...extra });
 const rpc = (who, fn, args) => call(who, 'POST', '/rest/v1/rpc/' + fn, args);
@@ -55,6 +55,13 @@ function record(id, desc, ok, expected, actual) {
   results.push({ test_id: id, description: desc, status: ok ? 'PASS' : 'FAIL', expected, actual });
   console.log(`${ok ? 'PASS' : 'FAIL'} ${id.padEnd(12)} ${desc}  [${actual}]`);
 }
+function info(id, desc, actual) {
+  results.push({ test_id: id, description: desc, status: 'INFO', expected: null, actual });
+  console.log(`INFO ${id.padEnd(12)} ${desc}  [${actual}]`);
+}
+// JSON.parse turns 93759.00 into 93759, so money scale is checked on the raw body PostgREST sent
+const rawText = r => new TextDecoder().decode(r.buf).trim();
+const twoDp = r => r.status === 200 && /^-?\d+\.\d{2}$/.test(rawText(r));
 const brief = r => `${r.status} ${r.json ? JSON.stringify(r.json).slice(0, 140) : r.buf.length + ' bytes'}`;
 const denied = r => r.status === 401 || r.status === 403 || (r.json && r.json.code === '42501');
 const emptyOrDenied = r => denied(r) || (r.status === 200 && Array.isArray(r.json) && r.json.length === 0);
@@ -139,7 +146,7 @@ record('H-FIN-04', 'a reversed transaction cannot be reversed again', r.status >
 r = await rest('a', 'POST', 'vw_funding_commitment_status', { status: 'fulfilled' });
 record('H-FIN-05', 'derived commitment status cannot be written', r.status >= 400, '4xx', brief(r));
 r = await rpc('a', 'get_available_cash', {});
-record('H-FIN-06', 'get_available_cash returns a 2-decimal amount', r.status === 200 && /^-?\d+\.\d{2}$/.test(String(r.json)), 'n.nn', brief(r));
+record('H-FIN-06', 'get_available_cash returns a 2-decimal amount', twoDp(r), 'n.nn', `${r.status} ${rawText(r)}`);
 r = await rpc('a', 'get_available_cash_for_business', { p_business_id: BIZ_B });
 record('H-FN-01', 'founder cannot call the service-only cash function', denied(r) || r.status === 404, '401/403/404', brief(r));
 
@@ -162,6 +169,10 @@ record('H-CONC-01', 'parallel allocations: exactly one wins in every round', cle
 // ---- Storage API ----
 const bytes = new Uint8Array(randomBytes(4096));
 const keyA = `${BIZ_A}/http/${RUN}.bin`;
+// The CDN caches authenticated downloads per token, so a GET can be served from the edge after the
+// object changed or was deleted. Existence and size are read from the list API (POST, never cached).
+const objInfo = async () => (await call('service', 'POST', '/storage/v1/object/list/company-vault',
+  { prefix: `${BIZ_A}/http/`, limit: 100, search: `${RUN}.bin` })).json?.find?.(o => o.name === `${RUN}.bin`);
 r = await call('a', 'POST', `/storage/v1/object/company-vault/${keyA}`, bytes, { 'Content-Type': 'application/octet-stream' });
 record('H-STO-01', 'founder A uploads into the business A folder', r.status === 200, '200', brief(r));
 r = await call('a', 'GET', `/storage/v1/object/authenticated/company-vault/${keyA}`);
@@ -175,11 +186,11 @@ record('H-STO-05', 'anon cannot download', r.status >= 400, '4xx', brief(r));
 r = await call('anon', 'GET', `/storage/v1/object/public/company-vault/${keyA}`);
 record('H-STO-06', 'bucket is not public', r.status >= 400, '4xx', brief(r));
 r = await call('a', 'POST', `/storage/v1/object/company-vault/${keyA}`, new Uint8Array(randomBytes(10)), { 'Content-Type': 'application/octet-stream', 'x-upsert': 'true' });
-const still = await call('a', 'GET', `/storage/v1/object/authenticated/company-vault/${keyA}`);
-record('H-STO-07', 'founder cannot overwrite an object (no UPDATE policy)', r.status >= 400 && sha(still.buf) === sha(bytes), '4xx + unchanged', `${r.status} ${sha(still.buf) === sha(bytes) ? 'unchanged' : 'CHANGED'}`);
+const still = await objInfo();
+record('H-STO-07', 'founder cannot overwrite an object (no UPDATE policy)', r.status >= 400 && still?.metadata?.size === bytes.length, '4xx + size 4096', `${r.status} size ${still?.metadata?.size}`);
 r = await call('a', 'DELETE', `/storage/v1/object/company-vault/${keyA}`);
-const after = await call('a', 'GET', `/storage/v1/object/authenticated/company-vault/${keyA}`);
-record('H-STO-08', 'founder cannot delete through the Storage API', after.status === 200 && sha(after.buf) === sha(bytes), 'object still there', `delete ${r.status}, then get ${after.status}`);
+const after = await objInfo();
+record('H-STO-08', 'founder cannot delete through the Storage API', r.status >= 400 && after?.metadata?.size === bytes.length, '4xx + still listed', `delete ${r.status}, then listed ${!!after}`);
 r = await call('b', 'POST', '/storage/v1/object/list/company-vault', { prefix: `${BIZ_A}/`, limit: 100 });
 record('H-STO-09', 'founder B cannot list business A folder', r.status === 200 ? r.json.length === 0 : r.status >= 400, '[] or 4xx', brief(r));
 
@@ -193,12 +204,15 @@ record('H-SR-03', 'service role cannot alter a transaction amount', r.status >= 
 r = await rest('service', 'DELETE', `activity_records?business_id=eq.${BIZ_A}`);
 record('H-SR-04', 'service role cannot delete activity records', r.status >= 400, '4xx', brief(r));
 r = await rpc('service', 'get_available_cash_for_business', { p_business_id: BIZ_A });
-record('H-SR-05', 'service role can compute cash for a named business', r.status === 200 && /^-?\d+\.\d{2}$/.test(String(r.json)), 'n.nn', brief(r));
+record('H-SR-05', 'service role can compute cash for a named business', twoDp(r), 'n.nn', `${r.status} ${rawText(r)}`);
 r = await rpc('service', 'create_workspace', { p_business_name: 'svc', p_base_currency: 'INR', p_locale: 'en-IN', p_timezone: 'Asia/Kolkata', p_full_name: 'svc' });
 record('H-SR-06', 'service role cannot create a workspace without a user', r.status >= 400, '4xx', brief(r));
 r = await call('service', 'DELETE', `/storage/v1/object/company-vault/${keyA}`);
-const gone = await call('a', 'GET', `/storage/v1/object/authenticated/company-vault/${keyA}`);
-record('H-SR-07', 'server-side deletion through the Storage API works', r.status === 200 && gone.status >= 400, '200 then 4xx', `${r.status} then ${gone.status}`);
+const gone = await objInfo();
+record('H-SR-07', 'server-side deletion through the Storage API works', r.status === 200 && !gone, '200 then not listed', `${r.status} then listed ${!!gone}`);
+const cached = await call('a', 'GET', `/storage/v1/object/authenticated/company-vault/${keyA}`);
+info('H-STO-CDN', 'founder A GET after server deletion (edge cache behaviour)',
+  `${cached.status} cf-cache-status ${cached.headers.get('cf-cache-status')} cache-control ${after?.metadata?.cacheControl}`);
 
 const summary = results.reduce((m, x) => (m[x.status] = (m[x.status] || 0) + 1, m), {});
 mkdirSync(join(repo, 'evidence'), { recursive: true });
