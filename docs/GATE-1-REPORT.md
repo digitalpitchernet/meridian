@@ -112,7 +112,8 @@ HTTP-harness defects found in the DPN runs (none were product defects):
 
 ## 6. Recovery drill
 
-Status: **scripted, not yet run.** `tests/recovery/drill.mjs` will:
+Status: **scripted, not yet run.** The full procedure, decisions D1–D5 and proposed script amendments A1–A6 are in
+`docs/RECOVERY-RUNBOOK.md` (draft for independent review). `tests/recovery/drill.mjs` will:
 1. check the target is empty;
 2. apply the 9 migration files with psql (no MCP), recording the versions;
 3. store a sentinel file in source storage;
