@@ -1,263 +1,285 @@
-# Meridian Gate 1 Recovery Drill: Runbook (for review, not yet executed)
+# Meridian Gate 1 Recovery Drill: Runbook (revision 2, for review, not yet executed)
 
-Status: **draft for independent review, 8 Nov 2026.** Nothing in this runbook has been run. The recovery target
-does not exist yet. The nine migrations, both validation projects and Gate 2 are untouched.
+Status: **revision 2 for independent review, 8 Nov 2026.** It includes the reviewer's six refinements and amendments
+A1–A6 as implemented. Changes from revision 1 are in `docs/RECOVERY-RUNBOOK-CHANGES.md`. Nothing has been run. The
+recovery target does not exist. The nine migrations, both validation projects and Gate 2 are untouched. **D1 (source
+sentinel write) is not approved.**
 
 Purpose: show that Meridian can be rebuilt in a separate, empty Supabase project from **the repository plus one
-backup**, with the database, Auth users, stored files and security posture all identical to the source.
-Automation: `tests/recovery/drill.mjs` (steps R-01…R-13), `tests/recovery/reconcile.sql` (fingerprint),
-`tests/recovery/orphans.sql` (referential integrity).
+backup**, with database, Auth users, stored files and security posture identical to the source. Any difference is
+either proven exact, classified as platform-generated with a stated reason, or fails the drill. Nothing is silently ignored.
+
+| File | Role |
+|---|---|
+| `tests/recovery/drill.mjs` | runs R-01 … R-16, writes `evidence/recovery-drill.json` |
+| `tests/recovery/platform-schema.sql` | A1: full definitions of `auth.users`, `auth.identities`, `storage.objects` |
+| `tests/recovery/reconcile.sql` | fingerprint: tables, full Auth rows, every Storage object field, finance as exact text, security posture |
+| `tests/recovery/compare.mjs` | diff and classification (exact / platform_generated / platform_version / unexpected) |
+| `tests/recovery/compare.test.mjs` | self-test of the classification rules |
+| `tests/recovery/orphans.sql` | A4: 84 public foreign keys + `auth.identities.user_id → auth.users.id` |
 
 | | Source | Target |
 |---|---|---|
-| Project | `meridian-g1-validation-clean`, ref `xwopffsacsctvjjwnxnw` | new, empty, created by the founder (name proposed: `meridian-g1-recovery-target`) |
+| Project | `meridian-g1-validation-clean`, ref `xwopffsacsctvjjwnxnw` | new, empty, created by the founder (proposed `meridian-g1-recovery-target`) |
 | Org / region / plan | DigitalPitcherNetworks, ap-south-1, Free | same org, **same region**, Free |
-| Role during the drill | read, except one sentinel file (decision D1) | written, disposable |
-| Postgres | 17.11 | must be 17.x (checked in P-4) |
+| Writes during the drill | **none**, unless D1 is approved (then one Storage file) | all restore writes; disposable |
+| Postgres | 17.11 | 17.x (checked) |
 
 Not involved at any point: `ahphlozxsgifgwbtwoqb` (preserved), the paused Rev 2.2 project, LiqrIt, production.
 
 ---
 
-## 0. Decisions needed before execution
+## 0. Decisions
 
-| # | Decision | Recommendation |
+| # | Decision | State |
 |---|---|---|
-| D1 | Allow the drill to write **one** 64 KB sentinel file into source Storage (`<business A>/recovery/sentinel-<time>.bin`). Without it the byte copy cannot be proven: the source holds 3 storage rows from SQL tests and **no file bytes** at all | Approve. It touches Storage only (no public table row, no document record). Keep it afterwards as evidence |
-| D2 | Approve the script amendments A1–A6 (§9) before the run | Approve; I implement them, then this runbook is re-reviewed |
-| D3 | Target project name and plan; the founder confirms the org can host one more Free project without pausing or changing either Meridian validation project | Create it only after D1/D2 |
-| D4 | Recovery time and recovery point targets (Gate 1 report, founder item 15) | Record the measured time this run; set targets afterwards |
-| D5 | After the drill: keep the target for review, or delete it | Keep until the Gate 1 evidence review closes |
+| D1 | Write **one** 64 KB sentinel file into source Storage (`company-vault/<business A>/recovery/sentinel-<ms>.bin`) so the byte copy can be proven. The source holds 3 storage index rows from the SQL tests and **no file bytes** | **Not approved.** The drill refuses to write it unless run with `--allow-source-sentinel`. Without it, R-03 is SKIPPED, R-06 is NOT_PROVEN and the result is **INCOMPLETE**, never PASS. Everything else is still fully tested |
+| D2 | Amendments A1–A6 | **Approved with refinements**; implemented (§9); awaiting re-review |
+| D3 | Target name and plan; the org can host one more Free project without pausing or changing either Meridian validation project | open; target not created |
+| D4 | Recovery time / recovery point targets (Gate 1 founder item 15) | open; this run records the time only |
+| D5 | Keep or delete the target afterwards | recommended: keep until the evidence review closes |
 
 ---
 
 ## 1. Credentials and `.env` (item 3)
 
-All values go only into the git-ignored `.env` in `C:\xampp\htdocs\meridian`. Gavin never sees or types them; the
-pre-commit hook blocks secret keys. Passwords inside a URI must be URL-encoded (`@` → `%40`, `#` → `%23`, `/` → `%2F`).
+Values go only into the git-ignored `.env` in `C:\xampp\htdocs\meridian`. Gavin never sees or types them; the
+pre-commit hook blocks secret keys. URL-encode passwords inside URIs (`@` → `%40`, `#` → `%23`, `/` → `%2F`).
 
-| Variable | Value | Where to find it | Used by |
+| Variable | Value | Where | Used by |
 |---|---|---|---|
 | `SUPABASE_URL` | `https://xwopffsacsctvjjwnxnw.supabase.co` | already set | R-03, R-06 |
 | `SUPABASE_SERVICE_ROLE_KEY` | source **secret** key (the rotated one) | already set | R-03, R-06 |
-| `SOURCE_DB_URL` | source **Session pooler** URI | source dashboard → Connect → Session pooler | R-01…R-13 |
-| `TARGET_SUPABASE_URL` | `https://<target-ref>.supabase.co` | target dashboard → Settings → API | R-06, A2 |
-| `TARGET_SERVICE_ROLE_KEY` | target **secret** key | target → Settings → API Keys | R-06, A2 |
-| `TARGET_SUPABASE_ANON_KEY` | target **publishable** key (new, for A2) | target → Settings → API Keys | A2 |
-| `TARGET_DB_URL` | target **Session pooler** URI | target → Connect → Session pooler | R-01…R-13 |
-| `PG_BIN` | optional; default `C:\Program Files\PostgreSQL\17\bin` (present, pg_dump 17.11) | | all psql/pg_dump calls |
+| `SOURCE_DB_URL` | source **Session pooler** URI | source → Connect → Session pooler | all SQL steps |
+| `TARGET_SUPABASE_URL` | `https://<target-ref>.supabase.co` | target → Settings → API | R-06, R-15, R-16 |
+| `TARGET_SERVICE_ROLE_KEY` | target **secret** key | target → Settings → API Keys | R-06, R-15, R-16 |
+| `TARGET_SUPABASE_ANON_KEY` | target **publishable** key | target → Settings → API Keys | R-16 |
+| `TARGET_DB_URL` | target **Session pooler** URI | target → Connect → Session pooler | all SQL steps |
+| `PG_BIN` | optional; default `C:\Program Files\PostgreSQL\17\bin` (pg_dump 17.11 present) | | psql, pg_dump |
 
-Session pooler URI shape: `postgresql://postgres.<ref>:<password>@aws-<n>-ap-south-1.pooler.supabase.com:5432/postgres`.
-Use port **5432 (session)**, not 6543 (transaction): the restore sets `session_replication_role` and needs one session.
-The direct `db.<ref>.supabase.co` host is IPv6-only on Free and may not resolve. The user must be `postgres.<ref>`, so
-migrations run as `postgres` (spec L6).
+URI shape: `postgresql://postgres.<ref>:<password>@aws-<n>-ap-south-1.pooler.supabase.com:5432/postgres`. Port **5432**
+(session), not 6543 (transaction): the restore sets `session_replication_role` inside one session. The user is
+`postgres.<ref>`, so migrations run as `postgres` (spec L6).
 
 ---
 
-## 2. Pre-flight (all read-only; nothing is written anywhere)
+## 2. Pre-flight (read-only everywhere)
 
 | Step | Who | Action | Pass |
 |---|---|---|---|
-| P-1 | Gavin (MCP) | Snapshot the source: 9 migration versions, 30 public tables, 4 users / 4 identities, 3 storage rows, 0 integration connections, 0 Vault secrets, orphans.sql = 0 | matches the values in this runbook |
+| P-1 | Gavin (MCP) | Source snapshot: 9 migrations, 30 public tables, 4 users / 4 identities, 3 index-only storage rows, 0 integration connections, 0 Vault secrets, `orphans.sql` 85 checks / 0 orphans | matches (all verified 8 Nov 2026) |
 | P-2 | Founder | Create the target (D3); fill `.env` (§1) | |
-| P-3 | Gavin (MCP) | Target is empty: 0 public tables, 0 `storage.objects`, 0 `auth.users`, no `company-vault` bucket; Postgres 17.x | all zero |
-| P-4 | Gavin (MCP) | Column parity of `auth.users`, `auth.identities`, `storage.objects` between source and target (also A1 in the script) | identical column lists |
-| P-5 | Founder | Dry-run backup, reads the source only. In your own terminal, with the source Session pooler URI in place of `<SOURCE_DB_URL>`: `& "C:\Program Files\PostgreSQL\17\bin\pg_dump.exe" "<SOURCE_DB_URL>" --data-only -t auth.users -f tests\recovery\.work\dryrun.sql`, then delete the file | exits 0, file non-empty |
-
-P-5 proves the pooler URI, the password and the `postgres` role's read access to `auth` before anything is written.
+| P-3 | Gavin (MCP) | Target empty: 0 public tables, 0 objects, 0 users, 0 buckets; Postgres 17.x | all zero |
+| P-4 | Gavin (MCP) | `platform-schema.sql` on both; identical `tables` section (the drill repeats this as R-01a) | identical |
+| P-5 | Founder | Dry-run read of the source in your own terminal: `& "C:\Program Files\PostgreSQL\17\bin\pg_dump.exe" "<SOURCE_DB_URL>" --data-only -t auth.users -f tests\recovery\.work\dryrun.sql`, then delete the file | exit 0, non-empty |
 
 ---
 
-## 3. Backup procedure for the source (item 1)
+## 3. Backup of the source (item 1)
 
-Performed by `drill.mjs` R-03 and R-04:
-
-1. **R-03 sentinel** (D1): upload 64 KB of random bytes to `company-vault/<business A>/recovery/sentinel-<ms>.bin` through
-   the Storage API with the source secret key. Its sha256 is printed.
-2. **R-04 data backup**:
+1. **R-03 sentinel, only with `--allow-source-sentinel` (D1).** 64 KB of random bytes to
+   `company-vault/<business A>/recovery/sentinel-<ms>.bin` through the Storage API with the source secret key. Its
+   key, size and sha256 go into the evidence. Without the flag the source is not written and R-03 is SKIPPED.
+2. **R-04 data backup:**
    ```
    pg_dump <SOURCE_DB_URL> --data-only --no-owner --no-privileges
            -t 'public.*' -t auth.users -t auth.identities -t storage.objects
            -f tests/recovery/.work/data.sql
    ```
-   - **Data only**: the schema comes from the repository migrations, never from the dump. That is the point of the drill.
+   - Data only: the schema comes from the repository migrations, never from the dump.
    - Included: all 30 public tables (no sequences exist), `auth.users`, `auth.identities`, the `storage.objects` index.
-   - Excluded on purpose: sessions, refresh tokens, MFA claims, one-time tokens, audit log (users sign in again on the target); the `qa` test schema; Supabase internal schemas.
-   - The dump's size and sha256 go into the evidence, so the restored file is provably the backed-up file.
-3. **File bytes** are not in the dump. They are read from source Storage in R-06 (§5).
+     Generated columns (`auth.users.confirmed_at`, `storage.objects.path_tokens`) are not dumped; Postgres recomputes them.
+   - Excluded: sessions, refresh tokens, MFA claims, one-time tokens, audit log, the `qa` test schema, Supabase internals.
+   - Dump size and sha256 are recorded.
+3. File bytes are read from source Storage in R-06. Reading may update Storage's own `last_accessed_at` on source
+   objects. With D1 not approved there are no byte-bearing objects, so no read happens.
 
-The dump holds bcrypt password hashes of the 4 test users and every business record. It stays in
-`tests/recovery/.work/` (git-ignored) and is deleted after the drill (§8, step 9).
+The dump holds bcrypt hashes and every business record. It stays in `tests/recovery/.work/` (git-ignored) and is
+deleted after the drill (§8 step 9).
 
 ---
 
-## 4. Restore procedure into the empty target (item 2)
+## 4. Restore into the empty target (item 2)
 
-1. **R-01** stop unless the target has 0 public tables, 0 storage objects and 0 Auth users.
-2. **R-02** apply `supabase/migrations/*.sql` in filename order with psql, each in its own transaction with
-   `ON_ERROR_STOP`, recording each version in `supabase_migrations.schema_migrations`. This builds every table, function,
-   grant, policy, trigger and the private `company-vault` bucket from the repository alone. MCP is not used on the target.
-3. **R-05** restore the dump **in one transaction**:
+1. **R-01** stop unless the target has 0 public tables, 0 objects, 0 Auth users, 0 buckets.
+2. **R-01a (A1)** before any write, `platform-schema.sql` on both projects. For `auth.users`, `auth.identities` and
+   `storage.objects` it compares, per column, the type with modifiers, nullability, the default or generation
+   expression, identity, generated flag and collation, plus every constraint, index and trigger definition. Any
+   difference stops the drill with nothing written. GoTrue and Storage migration levels are recorded; if they differ
+   while every definition is identical, that is recorded as a `platform_version` difference with its reason, not ignored.
+3. **R-02** apply `supabase/migrations/*.sql` in filename order with psql, each in its own transaction with
+   `ON_ERROR_STOP`, recording each version. From here the evidence marks the target **dirty** (A6).
+4. **R-05** restore in **one transaction**:
    ```
    SET session_replication_role = replica;
-   TRUNCATE public.installation_settings;   -- the migration's default row; the source row is restored
+   TRUNCATE public.installation_settings;   -- migration default row; the source row is restored
    \i data.sql
    SET session_replication_role = origin;
    ```
-   Replica mode stops guard, immutability and activity triggers from firing on history that is being reloaded (otherwise
-   reversed transactions would be refused and activity would be duplicated). It also skips foreign-key triggers, so
-   referential integrity is re-checked afterwards (orphans.sql, A4). CHECK, NOT NULL and UNIQUE constraints are still
-   enforced during the load. Any error rolls the whole restore back.
-
-   Note: `installation_settings.max_workspaces` is restored as **2**, the validation value, because the target is a copy.
+   Replica mode stops guard, immutability and activity triggers from re-firing on reloaded history. It also skips FK
+   triggers, so integrity is re-checked in R-14. CHECK, NOT NULL and UNIQUE are still enforced. Any error rolls the
+   whole restore back. `installation_settings.max_workspaces` comes back as 2, the validation value.
 
 ---
 
 ## 5. Auth users and relationships (item 4)
 
-- `auth.users` and `auth.identities` are restored row for row: same ids, emails, confirmation state, and the same bcrypt
-  hashes, so a user's password would work on the target. These rows were created by GoTrue itself (Admin API), so every
-  column GoTrue needs is non-NULL. That is the opposite of the HTTP 500 case, where SQL-inserted users had NULL token columns.
-- Relationships to `auth.users` from Meridian: `profiles.id` and `businesses.created_by_user_id`. Both come back with
-  the same ids in the same transaction; orphans.sql checks both (they are among the 84 public foreign keys).
-- Not restored: sessions and refresh tokens. Every user signs in again on the target, and access tokens issued by the
-  source are not valid on the target, which has its own signing keys.
-- Proof that GoTrue can use the restored users (A2): the Admin API on the target lists the same 4 ids, confirmed. Then
-  one restored user gets a new random password through the target Admin API (a change to the target only) and signs in
-  with the target publishable key: HTTP 200 and an access token.
-- Nothing is written to Auth tables outside the single restore transaction. No Auth schema object is changed.
+- `auth.users` and `auth.identities` are restored row for row: same ids, emails, confirmation state, bcrypt hashes.
+  These rows were created by GoTrue (Admin API), so no column GoTrue needs is NULL, unlike the earlier HTTP 500 case.
+- **R-09** compares both tables as full rows (`to_jsonb` per row, md5 of all rows in id order): any changed column fails.
+- **R-14** checks `auth.identities.user_id → auth.users.id` explicitly, plus the 84 public foreign keys, which
+  include `profiles.id → auth.users` and `businesses.created_by_user_id → auth.users`.
+- Not restored: sessions and refresh tokens. Users sign in again; source tokens are not valid on the target.
+- **R-15** GoTrue's Admin API on the target lists exactly the source user ids, all confirmed (a read).
+- **R-16, intentional deviation.** To prove a restored user can sign in, the drill sets a **new random password on one
+  restored user on the target** (the lowest user id) through the target Admin API, then signs in with the target
+  publishable key. This changes that user's `encrypted_password`, `updated_at` and `last_sign_in_at`, and adds session
+  and audit rows on the target only. It is recorded in `evidence.intentional_deviations` **before** the change is made,
+  with the user, fields, reason and time. All fingerprints are taken **before** R-16, so the comparison is unaffected.
+  R-15 and R-16 do not run if any earlier step failed, so a failed target stays as it was for diagnosis.
+- Nothing is written to Auth tables outside the single restore transaction and R-16. No Auth schema object is changed.
 
 ---
 
 ## 6. Vault and Storage objects (item 5)
 
-Two layers are restored separately and then compared:
-
 | Layer | Source of truth | How it moves |
 |---|---|---|
-| Index rows (`storage.objects`: id, bucket, name, owner, metadata) | the pg_dump | restored in R-05 |
-| File bytes | source Storage | R-06: for each indexed object, GET the bytes with the source secret key, upload to the same path on the target with the target secret key (`x-upsert: true`, because the row already exists), GET it back from the target and compare sha256 |
+| Index rows (`storage.objects`, all 15 columns) | the dump | restored in R-05 |
+| File bytes | source Storage | R-06: GET with the source secret key; POST to the same path on the target with the target secret key, the **source's mimetype and Cache-Control**, `x-upsert: true` (the row already exists); GET back and compare sha256 |
 
-- Rows with no bytes in the source (today: the 3 rows the SQL security suite inserted directly) are recorded as
-  `metadata_only` and stay index-only, exactly as in the source.
-- `public.documents` (1 SQL fixture row, whose storage key has no bytes in the source either) is restored with the
-  other public tables; its sha256 list is compared in R-11.
-- The bucket is not restored from data: migration 6 creates it, and R-12 compares id, public flag and the 50 MB limit.
-- Known gap, checked by A3: re-uploading with the service key can rewrite `owner_id` and Storage-generated metadata on
-  the row. In this drill every byte-bearing object (the sentinel) was uploaded by the service key, so nothing should
-  differ. With real founder uploads it would, and that needs a Gate 2 decision (restore owner columns from the dump,
-  or accept the change).
-- External connector files (`storage_provider = 'external_connector'`) are out of scope: there are none, and they live
-  on the founder's hosting, backed up there (connector README).
-- Supabase Vault secrets cannot be copied (ciphertext is bound to the project key). There are 0 today. In a real
-  recovery, integration secrets are entered again.
+- A row is treated as index-only only if its source `metadata` is NULL **and** Storage answers 400 not-found. Today
+  that is the 3 SQL-test rows. Any other read failure fails R-06.
+- **R-10** compares every column of every object, keyed by bucket/name: id, owner, owner_id, created_at, updated_at,
+  last_accessed_at, version, metadata (size, mimetype, eTag, cacheControl, contentLength, lastModified, httpStatusCode),
+  user_metadata, path_tokens, archived_at, is_delete_marker, is_versioned.
+
+Field classification (`compare.mjs`):
+
+| Class | Fields | Rule |
+|---|---|---|
+| **platform_generated** | `updated_at`, `last_accessed_at`, `version`, `metadata.lastModified` | allowed to differ **only on objects R-06 re-uploaded**; each listed in the evidence with its reason |
+| **exact** (everything else) | `id`, `owner`, `owner_id`, `created_at`, `metadata.size`, `metadata.mimetype`, `metadata.eTag`, `metadata.cacheControl`, `metadata.contentLength`, `user_metadata`, `path_tokens`, flags | any difference fails |
+| index-only rows | all fields | any difference fails |
+
+  If Storage's upsert turns out to replace `id` or rewrite `owner_id`, R-10 **fails**; it is not pre-accepted. The
+  founder then decides whether that is acceptable, and the classification is changed only with that approval.
+- `public.documents` (1 SQL fixture row, with no bytes in the source either) is compared in R-08, and its sha256 list in R-11.
+- The bucket comes from migration 6; R-12 compares id, public flag and the 50 MB limit.
+- External connector files: none, out of scope. Supabase Vault secrets: 0; they cannot be copied (project-bound key).
+- With D1 not approved, no object has bytes, so the platform_generated class cannot occur and every storage field must be exact.
 
 ---
 
 ## 7. Verification and acceptance criteria (item 6)
 
-`reconcile.sql` produces one JSON fingerprint per database. `drill.mjs` compares source and target field by field.
-**Every row below must PASS; any difference fails the drill.** No tolerance applies to money: values are compared as
-`numeric(15,2)` text.
+Result vocabulary in `evidence/recovery-drill.json`:
 
-| Area | Step | What is compared | Pass |
+| Result | Meaning |
+|---|---|
+| `PASS_EXACT` | every step PASS, zero differences of any class |
+| `PASS_WITH_CLASSIFIED_DIFFERENCES` | every step PASS; only `platform_generated` / `platform_version` differences, each listed with its reason |
+| `INCOMPLETE` | no failure, but a step was SKIPPED or NOT_PROVEN (the D1 case) |
+| `FAIL` | any `unexpected` difference or any failed step |
+
+| Area | Step | Compared | Pass |
 |---|---|---|---|
-| Target clean | R-01 | public tables, storage objects, auth users on the target | all 0 before the restore |
-| Schema | R-02, R-07 | 9 migration files applied; version list | identical 9 versions |
-| Schema posture | R-12 | table grants, column grants, policies (public + storage), RLS-enabled tables, function ACLs + SECURITY DEFINER flags, triggers (excluding `qa`), bucket | identical hashes |
-| Every record | R-08 | all 30 public tables: row count and md5 of every full row | identical for all 30 |
-| Financial records | R-11 | per business: available cash and every account balance as of 2100-01-01, live transaction sum, reversed count | identical |
-| Allocations | R-08, R-11 | `payment_allocations` full rows; live allocation sum per business | identical |
-| Commitments | R-08, R-11 | `funding_commitments` full rows; derived status counts per business from `vw_funding_commitment_status` | identical |
-| Activity history | R-08 | `activity_records` full rows (also proves no trigger fired during the restore) | identical row count and md5 |
-| Auth | R-09, A2 | user ids + emails, identity count; GoTrue lists them; one restored user signs in on the target | identical; 200 + token |
-| Storage index | R-10, A3 | bucket/name list; owner, size, mimetype, eTag per object | identical |
-| Stored files | R-06 | every byte-bearing object copied and its sha256 re-read from the target; sentinel included | copied = verified ≥ 1 |
-| Document hashes | R-11 | md5 of the sorted `documents.sha256` list per business | identical |
-| Referential integrity | A4 | orphans.sql on the target | 0 for all 84 foreign keys |
-| Overall | R-13 | the full fingerprint | zero differences |
+| Target clean | R-01 | public tables, objects, users, buckets | all 0 |
+| Platform tables | R-01a | full definitions of `auth.users`, `auth.identities`, `storage.objects` | identical |
+| Schema | R-02, R-07 | 9 files applied; version list | identical |
+| Schema posture | R-12 | table and column grants, policies (public + storage), RLS tables, function ACLs + DEFINER flags, triggers (not `qa`), bucket | identical |
+| Every record | R-08 | 30 public tables: row count + md5 of full rows | identical |
+| Financial | R-11 | per business: available cash, every account balance (as of 2100-01-01), live transaction sum, all as `numeric(15,2)` **text**; reversed count | identical |
+| Allocations | R-08, R-11 | `payment_allocations` rows; live allocation sum (text) | identical |
+| Commitments | R-08, R-11 | `funding_commitments` rows; derived status counts | identical |
+| Activity | R-08 | `activity_records` rows (also proves no trigger fired) | identical |
+| Auth | R-09 | `auth.users`, `auth.identities` full rows | identical |
+| Storage index | R-10 | every field of every object, classified as in §6 | no unexpected |
+| Files | R-06 | bytes copied, sha256 read back from the target | copied = verified ≥ 1 (NOT_PROVEN without D1) |
+| Documents | R-11 | md5 of sorted `documents.sha256` per business | identical |
+| Overall | R-13 | all areas | 0 unexpected |
+| Integrity | R-14 | `orphans.sql` on the target | 85 checks, 0 orphans |
+| Auth usable | R-15, R-16 | GoTrue lists the same ids, all confirmed; one user signs in | 200 + token; deviation recorded |
 
-Gavin's read-only follow-up on the target (MCP, after the script reports):
-1. orphans.sql again, independently of the script;
-2. the security advisor: expected 0008 ×1 INFO, 0029 ×8 WARN, leaked-password ×1 WARN, and **no** 0011 (`qa` is not restored);
-3. `qa` schema absent on the target.
+Gavin's read-only follow-up on the target via MCP: `orphans.sql` again; the security advisor (expected 0008 ×1 INFO,
+0029 ×8 WARN, leaked-password ×1 WARN, no 0011 because `qa` is not restored); `qa` absent.
 
-Evidence: `evidence/recovery-drill.json` (steps, dump size and sha256, sentinel key and sha256, duration). The fingerprints
-go to `tests/recovery/.work/fingerprints.json` for diff analysis; they are not committed.
+Evidence: `evidence/recovery-drill.json`, with steps, result, target state, dump size and sha256, sentinel
+(or null), file copy lists, platform versions, every classified difference, intentional deviations and duration.
+Fingerprints: `tests/recovery/.work/fingerprints.json` (not committed).
 
 ---
 
-## 8. Execution sequence and who does what (item 8)
+## 8. Sequence and who does what (item 8)
 
 | # | Founder | Gavin |
 |---|---|---|
-| 1 | Review this runbook; decide D1–D5 | Implement A1–A6 once approved; re-test the script offline; update this runbook |
-| 2 | | P-1 source snapshot (read-only) |
-| 3 | Create the target project; fill `.env` (§1) | |
+| 1 | Review revision 2 and the scripts; decide D1 and D3–D5 | Done: A1–A6 implemented; SQL verified read-only on the source; `compare.test.mjs` passes |
+| 2 | | P-1 (done 8 Nov 2026; repeated just before the run) |
+| 3 | Create the target; fill `.env` | |
 | 4 | | P-3, P-4 on the target (read-only) |
-| 5 | P-5 dry-run backup; report exit code | |
-| 6 | Run `node tests/recovery/drill.mjs --allow-source-sentinel`; paste the full output | |
-| 7 | | Analyse; run the §7 follow-ups; classify any difference |
+| 5 | P-5 dry-run read; report the exit code | |
+| 6 | Run **one** of: `node tests/recovery/drill.mjs` (D1 not approved → INCOMPLETE at best) or `node tests/recovery/drill.mjs --allow-source-sentinel` (D1 approved). Paste the full output | |
+| 7 | | Analyse; §7 follow-ups; classify any difference |
 | 8 | | Update the Gate 1 report, evidence and manifest; commit |
-| 9 | Delete `tests/recovery/.work` (`Remove-Item -Recurse -Force tests\recovery\.work`) | Confirm it is gone and was never committed |
-| 10 | Decide D5 (keep or delete the target) | |
+| 9 | `Remove-Item -Recurse -Force tests\recovery\.work` | Confirm it is gone and was never committed |
+| 10 | D5 | |
 
 Gavin does not: hold or enter credentials, run the credentialed scripts, create, pause, reset or delete projects,
 or write to either validation project.
 
 ---
 
-## 9. Script amendments proposed before execution (D2)
+## 9. Amendments (approved with refinements; implemented, not executed)
 
-The current `drill.mjs` covers R-01…R-13. Review found these gaps; none touches the migrations or product code.
+| # | Implemented as |
+|---|---|
+| A1 | R-01a + `platform-schema.sql`: full column definitions (type, nullability, default/generation, identity, generated, collation), constraints, indexes, triggers; stops before any write; versions recorded as classified |
+| A2 | R-15 (read) and R-16 (one password reset on the target, recorded first as an intentional deviation; runs only if everything before passed) |
+| A3 | `reconcile.sql` storage section: every column of every object; `compare.mjs` field classification (§6) |
+| A4 | R-14 + `orphans.sql`, now including `auth.identities.user_id → auth.users.id` |
+| A5 | `--allow-source-sentinel`; without it R-03 is SKIPPED and the result cannot be PASS |
+| A6 | `target_state` in the evidence and output: `dirty: recreate the target before any re-run` from R-02 onwards |
 
-| # | Amendment | Why |
-|---|---|---|
-| A1 | Before any write: compare the column lists of `auth.users`, `auth.identities`, `storage.objects` (source vs target) and stop on a difference | A Supabase platform version skew would otherwise fail mid-restore |
-| A2 | After R-09: GoTrue Admin API on the target lists the 4 restored ids; set a random password on one restored user (target only) and sign in with `TARGET_SUPABASE_ANON_KEY` | Proves the restored users are usable by Auth, not just present as rows |
-| A3 | Extend the `storage_objects` fingerprint with owner_id, size, mimetype and eTag | Detects ownership or metadata lost in the byte copy |
-| A4 | Run orphans.sql on the target as R-14 | Replica mode skipped FK triggers |
-| A5 | Refuse to write the sentinel unless `--allow-source-sentinel` is passed | Makes the only source write explicit (D1) |
-| A6 | On any failure after R-01, state in the output and the evidence that the target is now dirty and must be recreated | Prevents re-running into a half-restored target |
+Also changed: money in the fingerprint is compared as exact text (a scale difference such as `1500.0` versus
+`1500.00` would previously have been hidden by `JSON.parse`); Auth rows are compared in full, not ids and emails only;
+reconciliation steps R-07…R-14 all run and report before the drill stops, so one failure does not hide another.
 
 ---
 
 ## 10. Failure handling, abort and cutover (item 7)
 
-The drill is **not re-entrant**: once R-02 starts, the target is no longer empty and R-01 will refuse it. Every failure
-below ends with "stop; record; recreate the target"; the target is never repaired by hand.
+The drill is **not re-entrant**: from R-02 the target is dirty and R-01 will refuse it. Every failure ends with "stop;
+record; recreate the target". The target is never repaired by hand.
 
-| Fails at | State left behind | Source affected? | Action |
+| Fails at | State left | Source written? | Action |
 |---|---|---|---|
-| R-01 | nothing written | no | find out why the target is not empty; use a new empty project |
-| R-02 | target partly migrated (each file all-or-nothing) | no | record the failing file and error; recreate the target. A migration defect is a Gate 1 finding, fixed by a **new** forward migration only after approval |
-| R-03 | nothing new | no (upload failed) | check the source secret key; re-run (target is migrated, so recreate it first) |
-| R-04 | sentinel in source; target migrated, no data | sentinel only | fix the connection or version; recreate the target; re-run (a second sentinel is added) |
-| R-05 | restore rolled back as a whole | sentinel only | record the psql error; recreate the target |
-| R-06 | target restored, some files copied | sentinel only | record the object and status; recreate the target |
-| R-07…R-14 | target fully loaded but different | sentinel only | do not fix; keep the target; Gavin diffs the fingerprints and classifies (drill defect vs product defect vs platform) |
+| R-01 / R-01a | nothing written | no | new empty target; for R-01a, report the definition difference, which is a platform finding |
+| R-02 | target partly migrated (each file all-or-nothing) | no | record the file and error; recreate the target. A migration defect is fixed only by a **new** forward migration, with approval |
+| R-03 | target migrated | no (upload failed) | check the source key; recreate the target; re-run |
+| R-04 | target migrated; sentinel present if D1 | sentinel only | fix the connection or version; recreate the target |
+| R-05 | restore rolled back | sentinel only | record the psql error; recreate the target |
+| R-06 | restored, some files copied | sentinel only | record the object and status; recreate the target |
+| R-07…R-14 | loaded but different | sentinel only | keep the target untouched (R-15/R-16 do not run); Gavin diffs the fingerprints and classifies the cause (drill, product, platform) |
+| R-15 / R-16 | loaded; R-16 may have reset one password | sentinel only | record; the deviation is already in the evidence |
 
-The source is never written except the sentinel, so a failed drill never needs a source rollback. Abort at any time:
-stop the script (Ctrl+C). The target is disposable; then delete `tests/recovery/.work`.
+The source is never written except the sentinel (D1). A failed drill never needs a source rollback. To abort at any
+time, press Ctrl+C; the target is disposable; then delete `tests/recovery/.work`.
 
-**Cutover** (none in this drill: the source stays the system of record and nothing is pointed at the target). For a real
-recovery later, the documented procedure is:
+**Cutover:** none in this drill. The source stays the system of record and nothing is pointed at the target. For a real recovery later:
+1. freeze writes on the source and take the final backup (the recovery point);
+2. run R-01…R-16 against the new project, requiring `PASS_EXACT` or `PASS_WITH_CLASSIFIED_DIFFERENCES` with each difference accepted;
+3. re-enter Vault and integration secrets, redeploy Edge Functions and their secrets, re-point connector keys;
+4. switch the app's `SUPABASE_URL` and publishable key; users sign in again;
+5. smoke test: sign-in, own business, available cash equal to R-11, one Vault download;
+6. keep the old project read-only until the agreed period (D4) has passed.
 
-1. Freeze writes on the source (maintenance notice; revoke client access) and take the final backup: this is the recovery point.
-2. Run steps R-01…R-14 against the new project; all must PASS.
-3. Re-enter Supabase Vault and integration secrets; redeploy Edge Functions and their secrets; re-point the PHP connector
-   keys if used.
-4. Switch the app's `SUPABASE_URL` and publishable key to the new project. Users sign in again.
-5. Smoke test: sign-in, read own business, available cash equals R-11, one Vault download.
-6. Keep the old project read-only, unchanged, until the new one has run cleanly for an agreed period (D4).
-
-**Abort a cutover:** before step 4, simply stop: the source is unchanged and still authoritative. After step 4, switch the
-app config back to the source; any writes made on the new project during the window must be exported and re-entered,
-which is why writes stay frozen until step 5 passes.
+**Abort a cutover:** before step 4, stop; the source is unchanged and authoritative. After step 4, switch the
+config back; writes stay frozen until step 5 passes, so nothing made on the new project is lost.
 
 ---
 
 ## 11. Expected duration
 
-Source database 14 MB, 4 users, 1 to 4 files. Expected drill time a few minutes, dominated by the 9 psql migration calls
-and network round trips. It is measured and recorded (`duration_seconds`), not judged, until D4 sets a target.
+Source database 14 MB, 4 users, 0–1 byte-bearing files. A few minutes, dominated by the psql migration calls and
+network round trips. It is measured (`duration_seconds`), not judged, until D4 sets a target.

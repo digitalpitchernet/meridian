@@ -12,16 +12,19 @@ SELECT json_build_object(
       'SELECT count(*) AS c, md5(coalesce(string_agg(r::text, %L ORDER BY r::text), %L)) AS h FROM public.%I r',
       '|', '', t.tablename), false, true, '') AS x
     WHERE t.schemaname = 'public'),
-  'auth_users', (SELECT json_build_object('rows', count(*), 'md5', md5(coalesce(string_agg(id::text || ':' || coalesce(email, ''), '|' ORDER BY id), ''))) FROM auth.users),
-  'auth_identities', (SELECT count(*) FROM auth.identities),
-  'storage_objects', (SELECT json_build_object('rows', count(*), 'md5', md5(coalesce(string_agg(bucket_id || '/' || name, '|' ORDER BY bucket_id, name), ''))) FROM storage.objects),
+  -- full rows as jsonb (key order fixed, independent of column position); md5 only, so no hash or token leaves the database
+  'auth_users', (SELECT json_build_object('rows', count(*), 'ids', md5(coalesce(string_agg(u.id::text, '|' ORDER BY u.id), '')), 'md5', md5(coalesce(string_agg(to_jsonb(u)::text, '|' ORDER BY u.id), ''))) FROM auth.users u),
+  'auth_identities', (SELECT json_build_object('rows', count(*), 'md5', md5(coalesce(string_agg(to_jsonb(i)::text, '|' ORDER BY i.id), ''))) FROM auth.identities i),
+  -- every column of every object, keyed by bucket/name, so each field is compared and classified on its own (R-10)
+  'storage_objects', (SELECT json_build_object('rows', count(*), 'objects', coalesce(json_object_agg(o.bucket_id || '/' || o.name, to_jsonb(o) - 'bucket_id' - 'name'), '{}'::json)) FROM storage.objects o),
+  -- money as numeric(15,2) TEXT: JSON.parse would turn 1500.00 into 1500 and hide a scale difference
   'finance', (
     SELECT json_object_agg(b.id, json_build_object(
-      'available_cash', (SELECT coalesce(sum(balance) FILTER (WHERE counts_as_available_cash AND is_active), 0)::numeric(15,2) FROM public.compute_account_balances(b.id, DATE '2100-01-01')),
-      'balances', (SELECT json_object_agg(account_id, balance::numeric(15,2)) FROM public.compute_account_balances(b.id, DATE '2100-01-01')),
-      'tx_live_sum', (SELECT coalesce(sum(amount), 0) FROM public.transactions WHERE business_id = b.id AND NOT is_reversed),
+      'available_cash', (SELECT coalesce(sum(balance) FILTER (WHERE counts_as_available_cash AND is_active), 0)::numeric(15,2)::text FROM public.compute_account_balances(b.id, DATE '2100-01-01')),
+      'balances', (SELECT json_object_agg(account_id, balance::numeric(15,2)::text) FROM public.compute_account_balances(b.id, DATE '2100-01-01')),
+      'tx_live_sum', (SELECT coalesce(sum(amount), 0)::numeric(15,2)::text FROM public.transactions WHERE business_id = b.id AND NOT is_reversed),
       'tx_reversed', (SELECT count(*) FROM public.transactions WHERE business_id = b.id AND is_reversed),
-      'alloc_live_sum', (SELECT coalesce(sum(amount), 0) FROM public.payment_allocations WHERE business_id = b.id AND NOT is_reversed),
+      'alloc_live_sum', (SELECT coalesce(sum(amount), 0)::numeric(15,2)::text FROM public.payment_allocations WHERE business_id = b.id AND NOT is_reversed),
       'commitment_status', (SELECT json_object_agg(status, n) FROM (SELECT status, count(*) n FROM public.vw_funding_commitment_status WHERE business_id = b.id GROUP BY status) s),
       'document_sha256', (SELECT md5(coalesce(string_agg(sha256, '|' ORDER BY sha256), '')) FROM public.documents WHERE business_id = b.id)))
     FROM public.businesses b),
