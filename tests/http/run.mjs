@@ -1,9 +1,11 @@
 // HTTP validation against the hosted Gate 1 project: PostgREST, Storage API, parallel
 // allocations and service-role semantics.  Node 20+, no dependencies.
 //   1. copy .env.example to .env and fill SUPABASE_SERVICE_ROLE_KEY (never commit it)
-//   2. node tests/http/run.mjs
-// It sets fresh random passwords on the SQL fixture users (they are never printed), signs
-// in through GoTrue, and writes evidence/http-results.json. Safe to re-run.
+//   2. node tests/http/run.mjs              (all 46 checks)
+//      node tests/http/run.mjs --auth-only  (H-AUTH-01..03 only)
+// Users must come from tests/http/provision-users.mjs (Auth Admin API), never SQL inserts.
+// It sets fresh random passwords on them (never printed), signs in through GoTrue, and
+// writes evidence/http-results.json (or http-auth-results.json with --auth-only).
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createHash, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -16,10 +18,11 @@ const URL_ = env.SUPABASE_URL, PUB = env.SUPABASE_ANON_KEY, SR = env.SUPABASE_SE
 if (!URL_ || !PUB || !SR) { console.error('.env needs SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY'); process.exit(2); }
 
 const USERS = {
-  a: { id: '00000000-0000-4000-8000-0000000000a1', email: 'founder.a@meridian.test' },
-  b: { id: '00000000-0000-4000-8000-0000000000b2', email: 'founder.b@meridian.test' },
-  c: { id: '00000000-0000-4000-8000-0000000000c3', email: 'stranger.c@meridian.test' },
+  a: { email: 'founder.a@meridian.test' },
+  b: { email: 'founder.b@meridian.test' },
+  c: { email: 'stranger.c@meridian.test' },
 };
+const AUTH_ONLY = process.argv.includes('--auth-only');
 let BIZ_A, BIZ_B, ACCT_A; // resolved from the SQL fixtures after sign-in, so any fresh project works
 const RUN = new Date().toISOString().replace(/\D/g, '').slice(0, 14) + '-' + randomBytes(3).toString('hex');
 const sha = b => createHash('sha256').update(b).digest('hex');
@@ -52,6 +55,9 @@ const denied = r => r.status === 401 || r.status === 403 || (r.json && r.json.co
 const emptyOrDenied = r => denied(r) || (r.status === 200 && Array.isArray(r.json) && r.json.length === 0);
 
 // ---- auth setup ----
+const listed = await call('service', 'GET', '/auth/v1/admin/users?page=1&per_page=1000');
+for (const u of Object.values(USERS)) u.id = listed.json?.users?.find(x => x.email === u.email)?.id;
+if (Object.values(USERS).some(u => !u.id)) { console.error(`test users missing (admin list ${listed.status}): run tests/http/provision-users.mjs first`); process.exit(1); }
 const tokens = {};
 for (const [k, u] of Object.entries(USERS)) {
   const pw = randomBytes(24).toString('base64url');
@@ -60,7 +66,13 @@ for (const [k, u] of Object.entries(USERS)) {
   tokens[k] = si.json?.access_token;
   record(`H-AUTH-0${Object.keys(tokens).length}`, `user ${k} signs in through GoTrue`, up.status === 200 && !!tokens[k], '200 + token', `${up.status}/${si.status}`);
 }
-if (!tokens.a || !tokens.b) { console.error('sign-in failed; stopping'); process.exit(1); }
+if (AUTH_ONLY || !tokens.a || !tokens.b) {
+  mkdirSync(join(repo, 'evidence'), { recursive: true });
+  writeFileSync(join(repo, 'evidence', 'http-auth-results.json'), JSON.stringify({ suite: 'http-auth', project: URL_, ran_at: new Date().toISOString(), results }, null, 2) + '\n');
+  const bad = results.some(x => x.status === 'FAIL');
+  console.log(bad ? 'sign-in failed; stopping' : 'auth checks done (--auth-only)');
+  process.exit(bad ? 1 : 0);
+}
 const owned = async u => (await rest('service', 'GET', `businesses?select=id&created_by_user_id=eq.${u}`)).json?.[0]?.id;
 BIZ_A = await owned(USERS.a.id); BIZ_B = await owned(USERS.b.id);
 ACCT_A = (await rest('service', 'GET', `financial_accounts?select=id&business_id=eq.${BIZ_A}&name=eq.${encodeURIComponent('Bridge escrow-free account')}`)).json?.[0]?.id;

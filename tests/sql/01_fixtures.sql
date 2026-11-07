@@ -3,23 +3,23 @@
 -- (the real path); C is a signed-up stranger with no workspace; D is used to prove the
 -- installation workspace limit. Validation raises the limit to 2 so tenant isolation
 -- between two businesses can be tested; production keeps the default of 1.
+--
+-- The users are created by Supabase Auth itself (tests/http/provision-users.mjs, Admin
+-- API). This file only looks them up: inserting into auth.users with SQL leaves columns
+-- Auth requires non-NULL and breaks sign-in (HTTP 500, found 8 Nov 2026).
 -- =====================================================================================
 SELECT qa.suite('01_fixtures');
 
 DO $$
-DECLARE
-    ua uuid := '00000000-0000-4000-8000-0000000000a1';
-    ub uuid := '00000000-0000-4000-8000-0000000000b2';
-    uc uuid := '00000000-0000-4000-8000-0000000000c3';
-    ud uuid := '00000000-0000-4000-8000-0000000000d4';
+DECLARE k text; v uuid;
 BEGIN
-    INSERT INTO auth.users (id, instance_id, aud, role, email, created_at, updated_at)
-    VALUES (ua, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'founder.a@meridian.test', now(), now()),
-           (ub, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'founder.b@meridian.test', now(), now()),
-           (uc, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'stranger.c@meridian.test', now(), now()),
-           (ud, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'latecomer.d@meridian.test', now(), now())
-    ON CONFLICT (id) DO NOTHING;
-    PERFORM qa.setid('user_a', ua); PERFORM qa.setid('user_b', ub); PERFORM qa.setid('user_c', uc); PERFORM qa.setid('user_d', ud);
+    FOREACH k IN ARRAY ARRAY['a:founder.a', 'b:founder.b', 'c:stranger.c', 'd:latecomer.d'] LOOP
+        SELECT id INTO v FROM auth.users WHERE email = split_part(k, ':', 2) || '@meridian.test';
+        IF v IS NULL THEN
+            RAISE EXCEPTION 'test user %@meridian.test not found: run node tests/http/provision-users.mjs first', split_part(k, ':', 2);
+        END IF;
+        PERFORM qa.setid('user_' || split_part(k, ':', 1), v);
+    END LOOP;
     UPDATE public.installation_settings SET max_workspaces = 2;
 END $$;
 

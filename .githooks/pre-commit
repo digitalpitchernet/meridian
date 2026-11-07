@@ -1,0 +1,6 @@
+#!/bin/sh
+# Refuse commits that contain Supabase secret keys or service-role JWTs.
+if git diff --cached -U0 | grep -E '^\+' | grep -Eq 'sb_secret_[A-Za-z0-9_-]{10,}|eyJ[A-Za-z0-9_-]{20,}\.eyJ[A-Za-z0-9_-]*c2VydmljZV9yb2xl'; then
+  echo "pre-commit: a Supabase secret/service-role key is staged. Keep it in .env only." >&2
+  exit 1
+fi

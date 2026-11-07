@@ -1,10 +1,14 @@
 # Meridian Gate 1 Report (Rev 2.3.4 engineering foundation)
 
 Date: 8 Nov 2026. Repo: `C:\xampp\htdocs\meridian`, local commits only.
-Validation environment: **DPN** Supabase project `meridian-g1-validation` (ref `ahphlozxsgifgwbtwoqb`, ap-south-1), created empty by the
-founder on 8 Nov 2026. All 9 migrations were applied unchanged (each stored statement's MD5 equals its repo file) and the full validation
-was re-run there. The first run, in the LiqrIt org (`xpuhrahnndjfcpatarbv`), is superseded by founder direction; LiqrIt is no longer used
-for Meridian, and that run's files are in `docs/history/gate-1-liqrit/` only as the record of the defects it found.
+Validation environment: **DPN** Supabase project `meridian-g1-validation-clean` (ref `xwopffsacsctvjjwnxnw`, ap-south-1, free),
+created empty by the founder on 8 Nov 2026. All 9 migrations were applied unchanged (each stored statement's MD5 equals its repo file).
+Test users are created by Supabase Auth through the Admin API (`tests/http/provision-users.mjs`), never by SQL.
+
+Superseded runs, kept as evidence only:
+- `docs/history/gate-1-liqrit/`: first run, LiqrIt org (`xpuhrahnndjfcpatarbv`). LiqrIt is no longer used for Meridian. This run found the 3 defects in §4.
+- `docs/history/gate-1-dpn-first/`: DPN `meridian-g1-validation` (`ahphlozxsgifgwbtwoqb`). SQL clean, but sign-in returned HTTP 500 because the fixtures had inserted users straight into `auth.users`. The project is preserved, not deleted or reset.
+
 The paused Rev 2.2 project (`cnelrrpmnbhylhivyybs`) was not touched.
 
 ## 1. Readiness assessment
