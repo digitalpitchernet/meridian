@@ -3,6 +3,8 @@
 //   1. copy .env.example to .env and fill SUPABASE_SERVICE_ROLE_KEY (never commit it)
 //   2. node tests/http/run.mjs              (all 46 checks)
 //      node tests/http/run.mjs --auth-only  (H-AUTH-01..03 only)
+//      node tests/http/run.mjs --cache-probe (observation only: how Storage and the CDN treat
+//                                             Cache-Control on upload; writes http-cache-probe.json)
 // Users must come from tests/http/provision-users.mjs (Auth Admin API), never SQL inserts.
 // It sets fresh random passwords on them (never printed), signs in through GoTrue, and
 // writes evidence/http-results.json (or http-auth-results.json with --auth-only).
@@ -91,6 +93,30 @@ const owned = async u => (await rest('service', 'GET', `businesses?select=id&cre
 BIZ_A = await owned(USERS.a.id); BIZ_B = await owned(USERS.b.id);
 ACCT_A = (await rest('service', 'GET', `financial_accounts?select=id&business_id=eq.${BIZ_A}&name=eq.${encodeURIComponent('Bridge escrow-free account')}`)).json?.[0]?.id;
 if (!BIZ_A || !BIZ_B || !ACCT_A) { console.error('fixtures missing: run tests/sql 00, 01 and 21 part 1 first'); stop(1); }
+
+// ---- cache probe (Gate 2 input, not a Gate 1 check): one object per Cache-Control variant ----
+if (process.argv.includes('--cache-probe')) {
+  const probe = [];
+  for (const [label, cc] of [['none', null], ['no-store', 'no-store'], ['private-no-store', 'private, no-store'], ['max-age-3600', 'max-age=3600']]) {
+    const key = `${BIZ_A}/probe/${RUN}-${label}.bin`, path = `/storage/v1/object/authenticated/company-vault/${key}`;
+    const up = await call('a', 'POST', `/storage/v1/object/company-vault/${key}`, new Uint8Array(randomBytes(1024)),
+      { 'Content-Type': 'application/octet-stream', ...(cc ? { 'Cache-Control': cc } : {}) });
+    const meta = async () => (await call('service', 'POST', '/storage/v1/object/list/company-vault',
+      { prefix: `${BIZ_A}/probe/`, limit: 100, search: `${RUN}-${label}.bin` })).json?.find?.(o => o.name === `${RUN}-${label}.bin`);
+    const stored = (await meta())?.metadata?.cacheControl;
+    const g = async () => { const x = await call('a', 'GET', path); return `${x.status} cc=${x.headers.get('cache-control')} cf=${x.headers.get('cf-cache-status')}`; };
+    const get1 = await g(), get2 = await g();
+    const del = await call('service', 'DELETE', `/storage/v1/object/company-vault/${key}`);
+    const listed = !!(await meta());
+    const get3 = await g();
+    const row = { label, sent: cc, upload: up.status, stored, get1, get2, delete: del.status, listed_after_delete: listed, get_after_delete: get3 };
+    probe.push(row);
+    info(`H-CACHE-${label}`, `upload Cache-Control ${cc ?? '(none)'}`, `stored ${stored} | ${get1} | ${get2} | delete ${del.status} listed ${listed} | after ${get3}`);
+  }
+  mkdirSync(join(repo, 'evidence'), { recursive: true });
+  writeFileSync(join(repo, 'evidence', 'http-cache-probe.json'), JSON.stringify({ suite: 'http-cache-probe', run: RUN, project: URL_, ran_at: new Date().toISOString(), probe }, null, 2) + '\n');
+  stop(0);
+}
 
 // ---- anon ----
 record('H-ANON-01', 'anon cannot read businesses', emptyOrDenied(await rest('anon', 'GET', 'businesses?select=id')), 'denied or []', brief(await rest('anon', 'GET', 'businesses?select=id')));
