@@ -26,6 +26,14 @@ or is enforced by the app but not by the database.
 | G7 | `milestones.achieved_at` | Set when a milestone becomes Achieved, cleared when it stops being Achieved (same pattern as `projects.completed_at`) | A trigger, if the server should own it |
 | G8 | **Decision reviews** in the Command Centre | Decisions whose `review_date` has arrived appear in "Needs attention"; upcoming reviews appear in the schedule | — |
 
+**Founder decisions, 8 Nov 2026** (`docs/DECISION-REGISTER.md`):
+- **Deferred:** G1.
+- **Accepted:** G5.
+- **Closed:** G8.
+- **Approved for a future schema revision:** G2 (`archived_at` on contacts), G3 (database-level immutability of decided decisions), G4 (transactional supersede RPC), G6 (rationale enforced in the database) and G7 (database-owned `achieved_at`). The consolidated proposal is in progress.
+
+Until that revision ships, the app keeps the behaviour in the table above.
+
 ## Run it
 
 ```bash
