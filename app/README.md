@@ -1,4 +1,4 @@
-# Meridian app (M1 to M4.1)
+# Meridian app (M1 to M4.2)
 
 The Meridian application: vanilla HTML, CSS and JavaScript with native ES modules. No framework, no build step,
 no dependencies, no external requests.
@@ -7,9 +7,9 @@ no dependencies, no external requests.
 - M1: Command Centre, Projects, Tasks, the application shell and the Ctrl/Cmd+K launcher.
 - M2: Calendar, Milestones, Contacts and Decisions.
 - M3: Finances (accounts and cash, append-only transactions, funding, capital, CSV import).
-- M4.1: Settings.
+- M4.1: Settings. M4.2: Company Vault (metadata only, no file storage).
 
-**Not built yet:** Company Vault (M4.2) and Reports (M4.3). They appear in the navigation as honest "not built yet" pages, never as mock screens.
+**Not built yet:** Reports (M4.3). It appears in the navigation as an honest "not built yet" page, never as a mock screen.
 
 ## M2: schema gaps and app-level rules (flagged for review)
 
@@ -53,6 +53,25 @@ Workflows the approved contracts cannot fully support. No workaround was built f
 | F-4 | **CSV formats** | Only ISO dates, positive amounts and an explicit income/expense column are accepted. Other bank formats are flagged invalid, never converted on the client |
 | F-5 | **Recurring templates** | Shown as reminders. Posting an occurrence is Gate 2 |
 
+## M4.2: Company Vault, contract notes (flagged for review)
+
+The Vault follows migration 6: documents are archive-only (no delete for anyone), the client may change only
+`title`, `category` and `is_archived`, versions chain through `previous_version_id`, and each `document_links` row
+points at exactly one supported record (project, milestone, task, decision, contact, transaction, funding commitment,
+funding requirement), once.
+
+| # | Item | What the app does |
+|---|---|---|
+| V-1 | **No file bytes** | No Storage, Google Drive or external provider is connected. Every document is labelled *No file stored* and nothing offers a download. "Record document" reads a local file in the browser only to fill in its name, type, size and SHA-256; the bytes are not uploaded or kept |
+| V-2 | **No "not yet uploaded" state** | The schema has none, so development records carry `storage_provider = supabase_storage` and a key under the business folder for an object that does not exist. In production the upload must precede the row |
+| V-3 | **Linear history is an app rule** | The database allows two versions to point at the same previous version. The app adds versions only to the latest one |
+| V-4 | **Archive is per row** | `is_archived` is stored per version. The app archives and restores the whole chain together |
+| V-5 | **Integrations** | `integration_connections` is mirrored read-only (clients cannot write it). No Google Drive connection is built |
+| V-6 | **Vault caching (A17)** | The approved no-residual-access design stays gated: no CDN, storage or infrastructure change is made, and it belongs to the future Vault engineering assurance work |
+
+Fictional Vault fixtures: 14 document records (two version chains, two archived), 20 links. Their checksums are the
+SHA-256 of a `fictional:` label, not of any real file.
+
 ## Run it
 
 ```bash
@@ -63,7 +82,7 @@ With XAMPP's Apache running it is also at `http://localhost/meridian/app/`. `app
 the repository root stays denied.
 
 ```bash
-node --test "tests/app/*.test.mjs"   # 53 tests: core, data adapter, projections, M2, finance (incl. SQL parity)
+node --test "tests/app/*.test.mjs"   # 61 tests: core, data adapter, projections, M2, finance (incl. SQL parity), vault
 ```
 
 ## Data: development fixtures, no backend

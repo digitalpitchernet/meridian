@@ -9,6 +9,7 @@ import { contactsModule } from './contacts.js';
 import { decisionsModule } from './decisions.js';
 import { financesModule } from './finances.js';
 import { settingsModule } from './settings.js';
+import { vaultModule } from './vault.js';
 
 export const BUILT = {
   command: commandModule,
@@ -20,4 +21,5 @@ export const BUILT = {
   decisions: decisionsModule,
   finances: financesModule,
   settings: settingsModule,
+  vault: vaultModule,
 };

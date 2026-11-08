@@ -53,3 +53,7 @@ Reconciliation of the 17 items from the Gate 1 report. Items already implemented
 | A15 | Recovery targets (RPO/RTO) | What recovery point and recovery time are acceptable? Not yet defined. | **Deferred** | Founder decision: define RPO/RTO targets |
 | A16 | Second empty DPN project for recovery drill | Founder must create a second empty DPN project (like the validation project) as the recovery drill target. | **Deferred** | Founder action: create DPN project |
 | A17 | Vault caching (L16) — no residual access to deleted/revoked documents | CDN serves deleted files to tokens that already downloaded them. Direction (8 Nov 2026): no residual access; change in Gate 2 (not Gate 1). Options: download via Meridian function, or plan with CDN invalidation. | **Approved: schema revision** | Gate 2 design: download proxy function or paid plan with purge API |
+
+A17 constraint (founder, M4.2 authorisation): the approved Vault caching design (no residual access to deleted or revoked
+documents) does not authorise any production CDN, storage or infrastructure change. Its implementation stays gated and is
+part of the future Vault engineering assurance work. The development Vault stores no files, so nothing is cached.

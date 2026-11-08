@@ -189,5 +189,51 @@ export function createRepositories(db) {
     discard: (batchId) => db.remove('import_batches', batchId), // staged only; a committed batch is permanent (42501)
   };
 
-  return { workspace, projects, milestones, tasks, calendar, activity, contacts, decisions, accounts, transactions, funding, capital, imports };
+  // ---- M4.2: Company Vault (migration 6). Documents are archive-only: no delete operation exists here, by design. ----
+  // File bytes are NOT handled by this build: no Storage upload or download. filesStored says whether the adapter has a
+  // storage backend at all (the development adapter has none), so screens never offer a download that cannot work.
+  const documents = {
+    filesStored: !!db.storage,
+    list: (q = {}) => db.select('documents', { order: [{ col: 'updated_at', asc: false }], ...q }),
+    get: (id) => db.get('documents', id),
+    // metadata of a file: { title, category, original_filename, mime_type, size_bytes, sha256 }; the key is under the business folder
+    async record(meta, { previous = null } = {}) {
+      const bid = await db.rpc('get_current_business_id');
+      const key = `${bid}/documents/${crypto.randomUUID()}/${meta.original_filename}`;
+      return db.insert('documents', { storage_provider: 'supabase_storage', storage_key: key, version_number: previous ? previous.version_number + 1 : 1,
+        previous_version_id: previous?.id ?? null, ...meta });
+    },
+    // A new version continues the chain from the LATEST version only. The database does not forbid branching a chain
+    // (two rows pointing at one previous_version_id); this app rule keeps history linear. Flagged in the README.
+    async newVersion(latestId, meta) {
+      const prev = await db.get('documents', latestId);
+      if (!prev) throw new DataError('P0002', 'document not found');
+      if ((await db.select('documents', { eq: { previous_version_id: latestId } })).length) throw new DataError('23514', 'only the latest version can get a new version');
+      return documents.record({ title: prev.title, category: prev.category, ...meta }, { previous: prev });
+    },
+    update: (id, patch) => db.update('documents', id, patch), // title, category, is_archived only (column grants)
+    archive: (id) => db.update('documents', id, { is_archived: true }),
+    restore: (id) => db.update('documents', id, { is_archived: false }),
+    // the whole chain this document belongs to, newest version first
+    async versions(id) {
+      const all = await db.select('documents');
+      const byId = new Map(all.map(d => [d.id, d]));
+      let root = byId.get(id); const seen = new Set();
+      while (root?.previous_version_id && !seen.has(root.id)) { seen.add(root.id); root = byId.get(root.previous_version_id); }
+      const chain = []; let cur = root;
+      while (cur && !chain.includes(cur)) { chain.push(cur); cur = all.find(d => d.previous_version_id === cur.id); }
+      return chain.reverse();
+    },
+  };
+
+  const documentLinks = {
+    list: (q = {}) => db.select('document_links', { order: [{ col: 'created_at' }], ...q }),
+    forDocument: (documentId) => db.select('document_links', { eq: { document_id: documentId }, order: [{ col: 'created_at' }] }),
+    to: (column, targetId) => db.select('document_links', { eq: { [column]: targetId } }),
+    // exactly one target per link (chk_dl_one_target); the same document links to the same record once (23505)
+    link: (documentId, column, targetId) => db.insert('document_links', { document_id: documentId, [column]: targetId }),
+    unlink: (linkId) => db.remove('document_links', linkId), // removes the link only; the document is untouched
+  };
+
+  return { workspace, projects, milestones, tasks, calendar, activity, contacts, decisions, accounts, transactions, funding, capital, imports, documents, documentLinks };
 }

@@ -19,7 +19,7 @@ const clone = v => (v === undefined ? v : structuredClone(v));
 const initcap = s => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
 export function createFixtureAdapter({ seed, session, storage = null, storageKey = 'meridian.dev.v1', now = () => new Date(), uuid = () => crypto.randomUUID() }) {
-  const VERSION = 3; // bump when fixtures change shape: older browser snapshots are reseeded
+  const VERSION = 4; // bump when fixtures change shape: older browser snapshots are reseeded
   let db;
   const listeners = new Set();
 
@@ -107,7 +107,8 @@ export function createFixtureAdapter({ seed, session, storage = null, storageKey
     for (const u of s.uniques || []) {
       if (u.where && !u.where(row)) continue;
       if (u.cols.some(c => row[c] == null)) continue;
-      if (rows(table).some(r => r !== self && (!u.where || u.where(r)) && u.cols.every(c => r[c] === row[c]))) {
+      if (u.key && u.key(row) == null) continue;
+      if (rows(table).some(r => r !== self && (!u.where || u.where(r)) && u.cols.every(c => r[c] === row[c]) && (!u.key || u.key(r) === u.key(row)))) {
         throw new DataError(SQLSTATE.unique, `duplicate key value violates unique constraint "${u.name}"`, { constraint: u.name });
       }
     }
@@ -119,6 +120,7 @@ export function createFixtureAdapter({ seed, session, storage = null, storageKey
       if (c.default === 'uuid') row[col] = uuid();
       else if (c.default === 'now') row[col] = now().toISOString();
       else if (c.default === 'today') row[col] = now().toISOString().slice(0, 10);
+      else if (c.default === 'auth_uid') row[col] = session.profile_id;
       else if (typeof c.default === 'function') row[col] = c.default();
       else if (c.default !== undefined) row[col] = c.default;
       else row[col] = null;

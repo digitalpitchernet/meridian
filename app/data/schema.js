@@ -1,4 +1,5 @@
 import { FINANCE_TABLES } from './schema-finance.js';
+import { VAULT_TABLES } from './schema-vault.js';
 
 // Mirror of the Gate 1 schema (supabase/migrations, Rev 2.3.4) for the tables the app uses so far.
 // The development adapter enforces these rules so screens are built against the real constraints.
@@ -190,6 +191,9 @@ export const TABLES = {
 
 // finance tables (migrations 3-5) live in schema-finance.js
 Object.assign(TABLES, FINANCE_TABLES);
+
+// vault tables (migration 6) live in schema-vault.js
+Object.assign(TABLES, VAULT_TABLES);
 
 // SQLSTATE codes the adapter raises, matching what PostgREST returns from Postgres
 export const SQLSTATE = { notNull: '23502', check: '23514', fk: '23503', unique: '23505', privilege: '42501', noRow: 'P0002' };

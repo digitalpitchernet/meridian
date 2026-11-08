@@ -29,7 +29,7 @@ export const MODULES = [
   { id: 'decisions', group: 'Business', label: 'Decisions', icon: 'decision', path: '/decisions', milestone: 'M2', built: true,
     summary: 'Decision records with context, options, rationale and supersession.', tables: ['decisions', 'decision_options'],
     planned: ['Proposed, Approved, Superseded, Rejected', 'Options with pros and cons; the selected option', 'Review dates and supersession chains'] },
-  { id: 'vault', group: 'Business', label: 'Company Vault', icon: 'vault', path: '/vault', milestone: 'M4',
+  { id: 'vault', group: 'Business', label: 'Company Vault', icon: 'vault', path: '/vault', milestone: 'M4', built: true,
     summary: 'Company documents, archive-only, behind one storage-provider interface.', tables: ['documents', 'document_links'],
     planned: ['Documents by category with versions', 'Links to projects, tasks, decisions, contacts and finance records', 'Archive-only: no client deletion'] },
   { id: 'reports', group: 'Insights', label: 'Reports', icon: 'chart', path: '/reports', milestone: 'M4',
