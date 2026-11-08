@@ -1,3 +1,5 @@
+import { DataError } from './errors.js';
+
 // Repositories: the ONLY way screens read or write data. Named after the backend tables, views and RPCs
 // (supabase/migrations, ENGINEERING-SPEC §5), so swapping the development adapter for the Supabase adapter
 // does not change a single screen. Each repository takes an adapter with select/get/insert/update/remove/rpc.
@@ -77,13 +79,28 @@ export function createRepositories(db) {
     // Supersede: record the replacement, then point the old decision at it and mark it Superseded.
     // The old decision's outcome, options and rationale are left untouched (history is preserved).
     // NOT ATOMIC: two writes. Gate 1 has no RPC for this; when one is added, only this method changes.
-    async supersede(oldId, replacement) {
+    // replacement: decision columns; outcome: the chosen option's title (required); alternatives: other option titles.
+    // Writes, in order: new decision (Proposed) -> its options -> new decision Approved with the chosen option -> old
+    // decision Superseded and pointing at the new one.
+    async supersede(oldId, replacement, { outcome, alternatives = [] } = {}) {
       const old = await db.get('decisions', oldId);
-      if (!old) throw Object.assign(new Error('decision not found'), { code: 'P0002' });
-      if (old.status === 'Superseded') throw Object.assign(new Error('this decision has already been superseded'), { code: '23514' });
-      const created = await db.insert('decisions', { project_id: old.project_id, contact_id: old.contact_id, ...replacement });
+      if (!old) throw new DataError('P0002', 'decision not found');
+      if (old.status !== 'Approved' && old.status !== 'Rejected') throw new DataError('23514', 'only a decided (Approved or Rejected) decision can be superseded');
+      if (!outcome || !String(outcome).trim()) throw new DataError('23502', 'the new outcome is required', { column: 'outcome' });
+      const created = await db.insert('decisions', { project_id: old.project_id, contact_id: old.contact_id, ...replacement, status: 'Proposed' });
+      const chosen = await db.insert('decision_options', { decision_id: created.id, title: outcome, sort_order: 0 });
+      for (const [i, t] of alternatives.filter(x => String(x).trim()).entries()) await db.insert('decision_options', { decision_id: created.id, title: t, sort_order: i + 1 });
+      const approved = await db.update('decisions', created.id, { status: 'Approved', selected_option_id: chosen.id });
       const updated = await db.update('decisions', oldId, { status: 'Superseded', superseded_by_id: created.id });
-      return { created, updated };
+      return { created: approved, updated };
+    },
+    // Record the outcome of a Proposed decision: Approved with a chosen option, or Rejected.
+    async decide(id, { status, selected_option_id = null, rationale, decision_date }) {
+      const d = await db.get('decisions', id);
+      if (!d || d.status !== 'Proposed') throw new DataError('23514', 'only a Proposed decision can be decided');
+      if (status !== 'Approved' && status !== 'Rejected') throw new DataError('23514', 'outcome must be Approved or Rejected');
+      if (!rationale || !rationale.trim()) throw new DataError('23502', 'a rationale is required', { column: 'rationale' });
+      return db.update('decisions', id, { status, selected_option_id: status === 'Approved' ? selected_option_id : null, rationale, ...(decision_date ? { decision_date } : {}) });
     },
     // The chain of decisions this one replaced, newest first ([] if none)
     async history(decisionId) {

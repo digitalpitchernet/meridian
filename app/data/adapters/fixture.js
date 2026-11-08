@@ -6,10 +6,9 @@
 //   BEFORE triggers (updated_at, task completion sync) and AFTER record_activity() (append-only activity_records).
 // Errors carry the Postgres SQLSTATE so the future Supabase adapter can surface identical codes to screens.
 import { TABLES, SQLSTATE } from '../schema.js';
+import { DataError } from '../errors.js';
 
-export class DataError extends Error {
-  constructor(code, message, details) { super(message); this.name = 'DataError'; this.code = code; this.details = details; }
-}
+export { DataError } from '../errors.js';
 
 const clone = v => (v === undefined ? v : structuredClone(v));
 const initcap = s => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());

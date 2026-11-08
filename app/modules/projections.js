@@ -122,3 +122,19 @@ export function contactMatches(c, q) {
   const hay = [c.first_name, c.last_name, c.organization, c.role, c.email].filter(Boolean).join(' ').toLowerCase();
   return String(q).toLowerCase().split(/\s+/).filter(Boolean).every(w => hay.includes(w));
 }
+
+// ---------- M2: decisions ----------
+// App rules preserving decision history (the Gate 1 schema allows edits; enforcement in the database is a Gate 2 item):
+// only Proposed decisions are edited or deleted; decided ones change course by being superseded.
+export const decisionEditable = d => d.status === 'Proposed';
+export const canSupersede = d => d.status === 'Approved' || d.status === 'Rejected';
+// review_date: due (today or past, not superseded) | soon (≤ 7 days) | later | null
+export function reviewState(d, today) {
+  if (!d.review_date || d.status === 'Superseded') return null;
+  const n = daysBetween(today, d.review_date);
+  return n <= 0 ? 'due' : n <= 7 ? 'soon' : 'later';
+}
+export function decisionMatches(d, q) {
+  const hay = [d.title, d.context, d.problem, d.rationale].filter(Boolean).join(' ').toLowerCase();
+  return String(q).toLowerCase().split(/\s+/).filter(Boolean).every(w => hay.includes(w));
+}

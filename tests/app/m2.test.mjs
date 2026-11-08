@@ -125,3 +125,64 @@ test('relationships: deleting a project keeps tasks, cascades milestones, unlink
   assert.equal((await r.contacts.links({ eq: { project_id: beta.id } })).length, 0);
   for (const m of ms) assert.equal((await r.calendar.list({ eq: { milestone_id: m.id } })).length, 0);
 });
+
+import { decisionEditable, canSupersede, reviewState, decisionMatches } from '../../app/modules/projections.js';
+
+test('decisions: rules for editing, superseding, reviews and search', () => {
+  assert.ok(decisionEditable({ status: 'Proposed' })); assert.ok(!decisionEditable({ status: 'Approved' }));
+  assert.ok(canSupersede({ status: 'Approved' })); assert.ok(canSupersede({ status: 'Rejected' }));
+  assert.ok(!canSupersede({ status: 'Proposed' })); assert.ok(!canSupersede({ status: 'Superseded' }));
+  assert.equal(reviewState({ status: 'Approved', review_date: '2026-11-06' }, TODAY), 'due');
+  assert.equal(reviewState({ status: 'Approved', review_date: TODAY }, TODAY), 'due');
+  assert.equal(reviewState({ status: 'Approved', review_date: '2026-11-12' }, TODAY), 'soon');
+  assert.equal(reviewState({ status: 'Superseded', review_date: '2026-11-01' }, TODAY), null);
+  assert.equal(reviewState({ status: 'Approved', review_date: null }, TODAY), null);
+  const d = f.decisions.find(x => x.title.startsWith('Hosting for the beta: move'));
+  assert.ok(decisionMatches(d, 'backups monthly')); assert.ok(!decisionMatches(d, 'pricing'));
+});
+
+test('decisions: schema rules: self-supersession CHECK, selected option must belong to the same decision', async () => {
+  const { r } = repo();
+  const [a] = await r.decisions.list({ eq: { status: 'Proposed' } });
+  await rejects(r.decisions.update(a.id, { superseded_by_id: a.id }), '23514');
+  const other = f.decision_options.find(o => o.decision_id !== a.id);
+  await rejects(r.decisions.update(a.id, { selected_option_id: other.id }), '23503');
+  const own = (await r.decisions.options(a.id))[0];
+  assert.equal((await r.decisions.update(a.id, { selected_option_id: own.id })).selected_option_id, own.id);
+  await r.decisions.removeOption(own.id);
+  assert.equal((await r.decisions.get(a.id)).selected_option_id, null, 'deleting the selected option clears it (ON DELETE SET NULL)');
+});
+
+test('decisions: outcome recording requires a rationale and only applies to Proposed', async () => {
+  const { r } = repo();
+  const [p] = await r.decisions.list({ eq: { status: 'Proposed' } });
+  const [opt] = await r.decisions.options(p.id);
+  await rejects(r.decisions.decide(p.id, { status: 'Approved', selected_option_id: opt.id, rationale: '  ' }), '23502');
+  const done = await r.decisions.decide(p.id, { status: 'Approved', selected_option_id: opt.id, rationale: 'Runway matters more.', decision_date: TODAY });
+  assert.equal(done.status, 'Approved'); assert.equal(done.selected_option_id, opt.id); assert.equal(done.decision_date, TODAY);
+  await rejects(r.decisions.decide(p.id, { status: 'Rejected', rationale: 'again' }), '23514');
+});
+
+test('decisions: superseding preserves the old record and links both ways; chains are walkable; no double supersede', async () => {
+  const { r } = repo();
+  const current = f.decisions.find(x => x.title === 'Hosting for the beta: move to a managed platform');
+  const before = await r.decisions.get(current.id);
+  const beforeOptions = await r.decisions.options(current.id);
+  const { created, updated } = await r.decisions.supersede(current.id, { title: 'Hosting: self-managed database again', context: 'Costs tripled.', rationale: 'Cost now outweighs convenience.' },
+    { outcome: 'Self-managed Postgres with scripted backups', alternatives: ['Stay managed', ''] });
+  assert.equal(created.status, 'Approved'); assert.equal(created.project_id, before.project_id);
+  const opts = await r.decisions.options(created.id);
+  assert.deepEqual(opts.map(o => o.title), ['Self-managed Postgres with scripted backups', 'Stay managed']);
+  assert.equal(created.selected_option_id, opts[0].id);
+  // the old record keeps its outcome, options and rationale; only status and the forward link change
+  assert.equal(updated.status, 'Superseded'); assert.equal(updated.superseded_by_id, created.id);
+  for (const k of ['title', 'context', 'problem', 'rationale', 'selected_option_id', 'decision_date']) assert.deepEqual(updated[k], before[k], k);
+  assert.deepEqual((await r.decisions.options(current.id)).map(o => o.id), beforeOptions.map(o => o.id));
+  // chain: new -> current -> original (seeded as superseded by current)
+  const chain = await r.decisions.history(created.id);
+  assert.deepEqual(chain.map(x => x.title), ['Hosting for the beta: move to a managed platform', 'Hosting for the beta']);
+  await rejects(r.decisions.supersede(current.id, { title: 'x' }, { outcome: 'y' }), '23514');            // already superseded
+  const proposed = (await r.decisions.list({ eq: { status: 'Proposed' } }))[0];
+  await rejects(r.decisions.supersede(proposed.id, { title: 'x' }, { outcome: 'y' }), '23514');           // not decided yet
+  await rejects(r.decisions.supersede(created.id, { title: 'x' }, { outcome: '  ' }), '23502');           // outcome required
+});

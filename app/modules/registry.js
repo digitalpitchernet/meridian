@@ -26,7 +26,7 @@ export const MODULES = [
   { id: 'contacts', group: 'Business', label: 'Contacts', icon: 'users', path: '/contacts', milestone: 'M2', built: true,
     summary: 'Investors, clients, partners, vendors, advisors and collaborators, with interactions.', tables: ['contacts', 'contact_interactions', 'project_contacts'],
     planned: ['Contacts by category', 'Interaction history (meetings, calls, emails, notes)', 'Links to projects'] },
-  { id: 'decisions', group: 'Business', label: 'Decisions', icon: 'decision', path: '/decisions', milestone: 'M2',
+  { id: 'decisions', group: 'Business', label: 'Decisions', icon: 'decision', path: '/decisions', milestone: 'M2', built: true,
     summary: 'Decision records with context, options, rationale and supersession.', tables: ['decisions', 'decision_options'],
     planned: ['Proposed, Approved, Superseded, Rejected', 'Options with pros and cons; the selected option', 'Review dates and supersession chains'] },
   { id: 'vault', group: 'Business', label: 'Company Vault', icon: 'vault', path: '/vault', milestone: 'M4',

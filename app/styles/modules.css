@@ -398,3 +398,34 @@ a.kpi:hover { background: var(--surface-hover); }
   .contact-email { display: none; }
   .link-add { grid-template-columns: 1fr; }
 }
+
+/* ---------- decisions ---------- */
+.dec-row { gap: 10px; padding-left: 8px; }
+.dec-row .chip { min-width: 78px; justify-content: center; }
+.dec-main { display: grid; gap: 0; height: auto; padding: 8px 4px; }
+.dec-main:hover .row-title { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border-strong); }
+.is-superseded .row-title { color: var(--text-2); }
+.review { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); white-space: nowrap; color: var(--text-2); }
+.review-due { color: var(--bad); } .review-soon { color: var(--warn); }
+.decision-page .project-head { margin-bottom: var(--space-5); }
+.dec-section { margin-bottom: var(--space-5); }
+.dec-text { white-space: pre-wrap; color: var(--text); font-size: var(--text-md); line-height: 1.55; }
+.banner { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: var(--radius-lg); margin-bottom: var(--space-4); font-size: var(--text-sm); }
+.banner-superseded { background: var(--warn-soft); color: var(--text); border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent); }
+.banner-superseded .icon { color: var(--warn); }
+.options { display: grid; gap: 10px; margin-bottom: 10px; }
+.option { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 10px 12px; background: var(--surface); display: grid; gap: 8px; }
+.option.is-chosen { border-color: color-mix(in srgb, var(--ok) 55%, transparent); }
+.option-head { display: flex; align-items: center; gap: 8px; }
+.option-head strong { flex: 1; font-weight: 500; }
+.option-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.opt-label { display: block; font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 3px; }
+.opt-text { font-size: var(--text-sm); }
+.opt-text-ro { font-size: var(--text-sm); color: var(--text-2); white-space: pre-wrap; }
+.chain { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: var(--text-sm); }
+.chain-current { color: var(--text); }
+@media (max-width: 767px) {
+  .option-grid { grid-template-columns: 1fr; }
+  .dec-row .chip { min-width: 0; }
+  .dec-row .proj-tag { display: none; }
+}
