@@ -20,6 +20,9 @@ export function createRepositories(db) {
     updateBusiness: (id, patch) => db.update('businesses', id, patch),
     updateProfile: (id, patch) => db.update('profiles', id, patch),
     participants: () => db.select('participants', { order: [{ col: 'created_at' }] }),
+    createParticipant: (row) => db.insert('participants', row),
+    updateParticipant: (id, patch) => db.update('participants', id, patch),
+    removeParticipant: (id) => db.remove('participants', id),
   };
 
   const projects = {
@@ -111,5 +114,80 @@ export function createRepositories(db) {
     },
   };
 
-  return { workspace, projects, milestones, tasks, calendar, activity, contacts, decisions };
+  // ---- M3: finance (migrations 3-5). Amounts are numeric text; derived figures come only from views and RPCs. ----
+  const accounts = {
+    list: () => db.select('financial_accounts', { order: [{ col: 'name' }] }),
+    get: (id) => db.get('financial_accounts', id),
+    create: (row) => db.insert('financial_accounts', row),
+    update: (id, patch) => db.update('financial_accounts', id, patch), // name, institution, is_active, notes only
+    balances: (asOf = null) => db.rpc('get_account_balances', { p_as_of: asOf }),
+    availableCash: (asOf = null) => db.rpc('get_available_cash', { p_as_of: asOf }),
+    categories: () => db.select('financial_categories', { order: [{ col: 'kind' }, { col: 'name' }] }),
+    createCategory: (row) => db.insert('financial_categories', row),
+    updateCategory: (id, patch) => db.update('financial_categories', id, patch),
+    removeCategory: (id) => db.remove('financial_categories', id),
+    recurring: () => db.select('recurring_transactions', { order: [{ col: 'next_due_date' }] }),
+  };
+
+  const transactions = {
+    list: (q = {}) => db.select('transactions', { order: [{ col: 'transaction_date', asc: false }, { col: 'created_at', asc: false }], ...q }),
+    get: (id) => db.get('transactions', id),
+    // append-only: create, annotate (category, description, reference, notes) or reverse; never edit amounts or delete
+    create: (row) => db.insert('transactions', row),
+    annotate: (id, patch) => db.update('transactions', id, patch),
+    reverse: (id, reason) => db.rpc('reverse_transaction', { p_transaction_id: id, p_reason: reason }),
+    settlements: () => db.select('vw_settlement_status', { order: [{ col: 'transaction_date' }] }),
+    contributions: () => db.select('vw_participant_contribution_summary', { order: [{ col: 'full_name' }] }),
+  };
+
+  const funding = {
+    requirements: () => db.select('funding_requirements', { order: [{ col: 'needed_by' }, { col: 'created_at' }] }),
+    requirementSummaries: () => db.select('vw_funding_requirement_summary'),
+    getRequirement: (id) => db.get('funding_requirements', id),
+    createRequirement: (row) => db.insert('funding_requirements', row),
+    updateRequirement: (id, patch) => db.update('funding_requirements', id, patch),
+    removeRequirement: (id) => db.remove('funding_requirements', id),
+    commitments: (q = {}) => db.select('vw_funding_commitment_status', { order: [{ col: 'expected_payment_date' }], ...q }),
+    commitmentRows: () => db.select('funding_commitments'),
+    createCommitment: (row) => db.insert('funding_commitments', row),
+    updateCommitment: (id, patch) => db.update('funding_commitments', id, patch),
+    revokeCommitment: (id, reason) => db.rpc('revoke_funding_commitment', { p_commitment_id: id, p_reason: reason }),
+    allocations: (q = {}) => db.select('payment_allocations', { order: [{ col: 'created_at' }], ...q }),
+    allocate: (row) => db.insert('payment_allocations', row),
+    reverseAllocation: (id, reason) => db.rpc('reverse_payment_allocation', { p_allocation_id: id, p_reason: reason }),
+  };
+
+  const capital = {
+    structures: () => db.select('capital_structures', { order: [{ col: 'is_current', asc: false }, { col: 'effective_date', asc: false }] }),
+    structureSummaries: () => db.select('vw_capital_structure_summary'),
+    targets: () => db.select('capital_targets', { order: [{ col: 'target_date' }] }),
+    targetSummaries: () => db.select('vw_capital_target_summary'),
+    allocations: () => db.select('participant_capital_allocations', { order: [{ col: 'created_at' }] }),
+    createStructure: (row) => db.insert('capital_structures', row),
+    updateStructure: (id, patch) => db.update('capital_structures', id, patch),
+    createTarget: (row) => db.insert('capital_targets', row),
+    updateTarget: (id, patch) => db.update('capital_targets', id, patch),
+    removeTarget: (id) => db.remove('capital_targets', id),
+    createAllocation: (row) => db.insert('participant_capital_allocations', row),
+    updateAllocation: (id, patch) => db.update('participant_capital_allocations', id, patch),
+    removeAllocation: (id) => db.remove('participant_capital_allocations', id),
+  };
+
+  const imports = {
+    batches: () => db.select('import_batches', { order: [{ col: 'created_at', asc: false }] }),
+    get: (id) => db.get('import_batches', id),
+    rows: (batchId) => db.select('import_batch_rows', { eq: { batch_id: batchId }, order: [{ col: 'row_index' }] }),
+    // Stage = one batch insert, then one insert of all rows (a single PostgREST request with the Supabase adapter).
+    // payloads: [{ date, amount, type, description }] exactly as read from the file; the server parses and validates.
+    async stage({ account_id, filename, file_checksum_sha256 }, payloads) {
+      const batch = await db.insert('import_batches', { account_id, filename, file_checksum_sha256 });
+      for (const [i, payload] of payloads.entries()) await db.insert('import_batch_rows', { batch_id: batch.id, row_index: i, payload });
+      return batch;
+    },
+    resolve: (rowId, resolution, replaceId = null) => db.update('import_batch_rows', rowId, { resolution, replace_transaction_id: resolution === 'replace' ? replaceId : null }),
+    commit: (batchId) => db.rpc('commit_import_batch', { p_batch_id: batchId }),
+    discard: (batchId) => db.remove('import_batches', batchId), // staged only; a committed batch is permanent (42501)
+  };
+
+  return { workspace, projects, milestones, tasks, calendar, activity, contacts, decisions, accounts, transactions, funding, capital, imports };
 }

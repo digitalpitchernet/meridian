@@ -1,4 +1,4 @@
-# Meridian app (M1 + M2)
+# Meridian app (M1 to M4.1)
 
 The Meridian application: vanilla HTML, CSS and JavaScript with native ES modules. No framework, no build step,
 no dependencies, no external requests.
@@ -6,9 +6,10 @@ no dependencies, no external requests.
 **Built:**
 - M1: Command Centre, Projects, Tasks, the application shell and the Ctrl/Cmd+K launcher.
 - M2: Calendar, Milestones, Contacts and Decisions.
+- M3: Finances (accounts and cash, append-only transactions, funding, capital, CSV import).
+- M4.1: Settings.
 
-**Not built yet:** Finances (M3); Company Vault, Reports and Settings (M4). They appear in the navigation as honest
-"not built yet" pages, never as mock screens.
+**Not built yet:** Company Vault (M4.2) and Reports (M4.3). They appear in the navigation as honest "not built yet" pages, never as mock screens.
 
 ## M2: schema gaps and app-level rules (flagged for review)
 
@@ -34,6 +35,24 @@ or is enforced by the app but not by the database.
 
 Until that revision ships, the app keeps the behaviour in the table above.
 
+## M3: Finances, contract notes (flagged for review)
+
+Finances runs on the development adapter, which emulates migrations 3–5: every CHECK, every trigger guard, the
+finance views and the RPCs (`get_available_cash`, `get_account_balances`, `reverse_transaction`,
+`reverse_payment_allocation`, `revoke_funding_commitment`, `commit_import_batch`). Every write is atomic.
+`tests/app/finance-parity.test.mjs` replays `tests/sql/20_financial.sql` and `30_csv_import.sql` with the same
+hand-computed figures and SQLSTATEs. Screens never compute a balance, cash figure or status: they read views and RPCs.
+
+Workflows the approved contracts cannot fully support. No workaround was built for any of these:
+
+| # | Item | What the app does |
+|---|---|---|
+| F-1 | **Manual correction link** | `replaces_transaction_id` is not client-insertable (only CSV import sets it). A hand correction is a reversal with a reason plus a new, unlinked transaction |
+| F-2 | **In-file CSV duplicates** | The server sets `duplicate_in_batch` only inside `commit_import_batch`, and a refused commit rolls it back. The screen shows "same as row N" from the server-computed `fingerprint` instead |
+| F-3 | **Runway** | `countdown_preferences.show_runway_days` exists, but no runway definition or RPC is approved. Not shown |
+| F-4 | **CSV formats** | Only ISO dates, positive amounts and an explicit income/expense column are accepted. Other bank formats are flagged invalid, never converted on the client |
+| F-5 | **Recurring templates** | Shown as reminders. Posting an occurrence is Gate 2 |
+
 ## Run it
 
 ```bash
@@ -44,7 +63,7 @@ With XAMPP's Apache running it is also at `http://localhost/meridian/app/`. `app
 the repository root stays denied.
 
 ```bash
-node --test "tests/app/*.test.mjs"   # 38 tests: core, data adapter rules, projections, calendar, contacts, decisions
+node --test "tests/app/*.test.mjs"   # 53 tests: core, data adapter, projections, M2, finance (incl. SQL parity)
 ```
 
 ## Data: development fixtures, no backend
@@ -100,7 +119,7 @@ Connecting the backend later means adding `adapters/supabase.js` with the same i
    - available cash is shown as "Not connected".
 3. **Needs attention:** overdue open tasks (Critical first), then late milestones (Delayed, or open and past due),
    then tasks due today, then Critical tasks with no due date. Up to 8, with a count of the rest.
-4. **Finance and funding panels** show an explicit "not connected yet" state until M3. No estimated figures.
+4. **Finance and funding panels** in the Command Centre still show "not connected yet": wiring them to the Finances repositories (M3.5) is not done. No estimated figures are shown.
 5. **Schedule:**
    - covers the next 14 days in the business time zone;
    - lists calendar events, open task due dates and open milestone due dates;

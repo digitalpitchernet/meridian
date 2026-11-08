@@ -17,7 +17,7 @@ export const MODULES = [
   { id: 'milestones', group: 'Workspace', label: 'Milestones', icon: 'flag', path: '/milestones', milestone: 'M2', built: true,
     summary: 'Milestones across projects: Upcoming, In Progress, Achieved, Delayed, Cancelled.', tables: ['milestones'],
     planned: ['Timeline of every milestone by due date', 'Status changes with achieved dates', 'Countdowns where the profile enables them'] },
-  { id: 'finances', group: 'Business', label: 'Finances', icon: 'wallet', path: '/finances', milestone: 'M3',
+  { id: 'finances', group: 'Business', label: 'Finances', icon: 'wallet', path: '/finances', milestone: 'M3', built: true,
     summary: 'Accounts, transactions, funding requirements and commitments, capital structure, CSV import.',
     tables: ['financial_accounts', 'transactions', 'payment_allocations', 'funding_requirements', 'funding_commitments', 'capital_structures', 'import_batches'],
     planned: ['Accounts and available cash as of a date (get_available_cash)', 'Append-only transactions; corrections by reversal with a reason',
@@ -35,7 +35,7 @@ export const MODULES = [
   { id: 'reports', group: 'Insights', label: 'Reports', icon: 'chart', path: '/reports', milestone: 'M4',
     summary: 'Read-only reports built from the modules.', tables: [],
     planned: ['Project and task throughput', 'Funding and capital position', 'Exports'] },
-  { id: 'settings', group: 'System', label: 'Settings', icon: 'settings', path: '/settings', milestone: 'M4',
+  { id: 'settings', group: 'System', label: 'Settings', icon: 'settings', path: '/settings', milestone: 'M4', built: true,
     summary: 'Business profile, founder preferences and development data controls.', tables: ['businesses', 'profiles', 'participants'],
     planned: ['Business profile (base currency is fixed after onboarding)', 'Theme, accent, date, time and number formats, week start', 'Participants: founder and co-founder records'] },
 ];

@@ -1,3 +1,5 @@
+import { FINANCE_TABLES } from './schema-finance.js';
+
 // Mirror of the Gate 1 schema (supabase/migrations, Rev 2.3.4) for the tables the app uses so far.
 // The development adapter enforces these rules so screens are built against the real constraints.
 // The DATABASE is the authority: when this file and the migrations disagree, the migrations win and this is a bug.
@@ -185,6 +187,9 @@ export const TABLES = {
     checks: [r => new Date(r.ends_at) >= new Date(r.starts_at) || 'chk_calendar_times'],
   },
 };
+
+// finance tables (migrations 3-5) live in schema-finance.js
+Object.assign(TABLES, FINANCE_TABLES);
 
 // SQLSTATE codes the adapter raises, matching what PostgREST returns from Postgres
 export const SQLSTATE = { notNull: '23502', check: '23514', fk: '23503', unique: '23505', privilege: '42501', noRow: 'P0002' };

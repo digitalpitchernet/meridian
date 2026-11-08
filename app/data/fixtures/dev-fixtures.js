@@ -2,12 +2,14 @@
 // No real people, businesses or financial data. Used only by the development adapter (adapters/fixture.js).
 // Dates are relative to business-local "today" so overdue / due-soon / upcoming states always exist.
 import { addDays } from '../../core/format.js';
+import { buildFinanceFixtures } from './dev-finance.js';
+import { TABLES } from '../schema.js';
 
 export const DEV_BUSINESS_ID = '00000000-0000-4000-8000-00000000b001';
 export const DEV_PROFILE_ID = '00000000-0000-4000-8000-00000000a001';
 
 const ids = {};
-const fid = (kind, n) => (ids[`${kind}${n}`] ||= `00000000-0000-4000-8${{ p: '1', m: '2', t: '3', s: '4', e: '5', c: '6', r: '7', a: '8', x: '9' }[kind]}00-${String(n).padStart(12, '0')}`);
+const fid = (kind, n) => (ids[`${kind}${n}`] ||= `00000000-0000-4000-8${{ p: '1', m: '2', t: '3', s: '4', e: '5', c: '6', r: '7', a: '8', x: '9', f: 'a', g: 'b', h: 'c' }[kind]}00-${String(n).padStart(12, '0')}`);
 
 // ISO timestamp at hh:mm business-local (Asia/Kolkata, +05:30) on today + offset days
 const at = (today, offset, hh = 10, mm = 0) => new Date(`${addDays(today, offset)}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00+05:30`).toISOString();
@@ -161,5 +163,7 @@ export function buildFixtures(today) {
     act(6, 0, 9, 'projects', 'update', P(3), 'Brand identity refresh', 'Planning'),
   ];
 
-  return { businesses, profiles, participants, projects, milestones, tasks, subtasks, calendar_events, contacts, project_contacts, contact_interactions: [], decisions, decision_options, activity_records };
+  const finance = buildFinanceFixtures({ B, d, ts, fid, founder: participants[0].id, cofounder: participants[1].id, project: P(2) });
+
+  return { businesses, profiles, participants, projects, milestones, tasks, subtasks, calendar_events, contacts, project_contacts, contact_interactions: [], decisions, decision_options, activity_records, ...finance };
 }

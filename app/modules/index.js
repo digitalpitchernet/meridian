@@ -7,6 +7,8 @@ import { milestonesModule } from './milestones.js';
 import { calendarModule } from './calendar.js';
 import { contactsModule } from './contacts.js';
 import { decisionsModule } from './decisions.js';
+import { financesModule } from './finances.js';
+import { settingsModule } from './settings.js';
 
 export const BUILT = {
   command: commandModule,
@@ -16,4 +18,6 @@ export const BUILT = {
   calendar: calendarModule,
   contacts: contactsModule,
   decisions: decisionsModule,
+  finances: financesModule,
+  settings: settingsModule,
 };
