@@ -22,7 +22,15 @@ export function createRepositories(db) {
     participants: () => db.select('participants', { order: [{ col: 'created_at' }] }),
     createParticipant: (row) => db.insert('participants', row),
     updateParticipant: (id, patch) => db.update('participants', id, patch),
+    // Delete is granted, but transactions, funding_commitments and participant_capital_allocations reference
+    // participants ON DELETE RESTRICT: the database refuses (23503) while any of them exists. Deactivate instead.
     removeParticipant: (id) => db.remove('participants', id),
+    setParticipantActive: (id, active) => db.update('participants', id, { is_active: active }),
+    async participantUsage(id) {
+      const [transactions, commitments, capitalAllocations] = await Promise.all(['transactions', 'funding_commitments', 'participant_capital_allocations']
+        .map(t => db.select(t, { eq: { participant_id: id } }).then(r => r.length)));
+      return { transactions, commitments, capitalAllocations, total: transactions + commitments + capitalAllocations };
+    },
   };
 
   const projects = {

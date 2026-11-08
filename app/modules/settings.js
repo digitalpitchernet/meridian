@@ -157,8 +157,7 @@ async function participantDialog(ctx, existing = null, allParticipants = []) {
     designation: input({ value: p.designation || '', maxlength: 100, placeholder: 'e.g., Founder, CTO, Angel Investor' }),
     email: input({ value: p.email || '', type: 'email', inputmode: 'email' }),
     phone: input({ value: p.phone || '', type: 'tel' }),
-    agreed_equity_percentage: input({ value: p.agreed_equity_percentage || '', type: 'number', step: '0.01', min: '0', max: '100', placeholder: 'e.g., 45.5' }),
-    is_active: input({ type: 'checkbox', checked: p.is_active !== false }),
+    agreed_equity_percentage: input({ value: p.agreed_equity_percentage ?? '', type: 'number', step: '0.01', min: '0', max: '100', placeholder: '0' }),
     notes: textarea({ value: p.notes || '', rows: 3 }),
   };
 
@@ -175,8 +174,7 @@ async function participantDialog(ctx, existing = null, allParticipants = []) {
       field('Designation', f.designation),
       field('Email', f.email),
       field('Phone', f.phone),
-      field('Agreed equity %', f.agreed_equity_percentage, { help: 'Percentage, e.g., 45.5 for 45.5%' }),
-      field('Active', h('div', null, f.is_active)),
+      field('Agreed equity %', f.agreed_equity_percentage, { hint: 'Agreed ownership, 0–100. Money and capital allocations never change it.' }),
       field('Notes', f.notes, { full: true })
     ),
     actions: [{ label: 'Cancel', kind: 'ghost' }, {
@@ -184,11 +182,7 @@ async function participantDialog(ctx, existing = null, allParticipants = []) {
         Object.values(f).forEach(x => setFieldError(x, ''));
         const row = Object.fromEntries(
           Object.entries(f).map(([k, el]) => {
-            if (k === 'agreed_equity_percentage') {
-              const v = el.value.trim();
-              return v ? [k, v] : [k, null];
-            }
-            if (k === 'is_active') return [k, el.checked];
+            if (k === 'agreed_equity_percentage') return [k, el.value.trim() || '0']; // NOT NULL DEFAULT 0
             return [k, k === 'full_name' ? el.value : nullIfEmpty(el.value?.trim())];
           })
         );
@@ -211,36 +205,68 @@ async function participantDialog(ctx, existing = null, allParticipants = []) {
   });
 }
 
-async function deleteParticipant(ctx, participant, allParticipants) {
-  const isFounder = participant.participant_type === 'founder';
-  const otherFounders = allParticipants.filter(p => p.participant_type === 'founder' && p.id !== participant.id);
-  const body = h('div', null,
-    h('p', null, `Delete ${participant.full_name} (${participant.participant_type})? This can’t be undone.`),
-    isFounder && otherFounders.length === 0 && h('p', { class: 'fg-warn' }, '⚠ This is the only founder record. Removing it will leave the business without a founder.')
-  );
-  const ok = await confirmDialog({ title: 'Delete participant?', danger: true, confirmLabel: 'Delete', body });
-  if (!ok) return false;
-  await ctx.data.workspace.removeParticipant(participant.id);
-  ctx.toast('Participant deleted');
-  return true;
+// ---------- participant removal and deactivation ----------
+// The database is the authority (migrations 1, 3, 4): DELETE is granted, but transactions, funding_commitments and
+// participant_capital_allocations reference participants ON DELETE RESTRICT, so anyone with money, pledges or capital
+// plans on record cannot be deleted. Deactivation (participants.is_active) keeps every record and hides the
+// participant from pickers for new entries. The participant linked to the signed-in founder's profile is the account
+// owner's own record: the app offers neither removal nor deactivation for it.
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const isOwner = (ctx, p) => p.profile_id != null && p.profile_id === ctx.profile.id;
+
+function setActive(ctx, p, active) {
+  if (active) return ctx.data.workspace.setParticipantActive(p.id, true).then(() => ctx.toast(`${p.full_name} is active again`)).catch(e => ctx.toast(friendlyError(e).message, { tone: 'bad' }));
+  return confirmDialog({ title: `Deactivate ${p.full_name}?`, confirmLabel: 'Deactivate',
+    body: h('div', null, h('p', null, 'Every record that mentions them stays exactly as it is: transactions, commitments, capital allocations and their contribution figures.'),
+      h('p', null, 'They will no longer be offered for new commitments or capital allocations. While money is still owed to them, they stay available for recording repayments. You can reactivate them at any time.')) })
+    .then(ok => ok && ctx.data.workspace.setParticipantActive(p.id, false).then(() => ctx.toast(`${p.full_name} deactivated`)))
+    .catch(e => ctx.toast(friendlyError(e).message, { tone: 'bad' }));
 }
 
-function participantRow(p, allParticipants) {
-  const equity = p.agreed_equity_percentage != null ? `${Number(p.agreed_equity_percentage).toFixed(2)}%` : '—';
+async function removeParticipant(ctx, p) {
+  if (isOwner(ctx, p)) {
+    openDialog({ title: `${p.full_name} can’t be removed`, size: 'sm',
+      content: h('div', { class: 'confirm-body' }, h('p', null, 'This is your own participant record, linked to the account you are signed in with. It anchors your contributions, loans and equity.'),
+        h('p', null, 'You can edit its details, but not remove or deactivate it.')),
+      actions: [{ label: 'Close', kind: 'secondary' }] });
+    return;
+  }
+  const usage = await ctx.data.workspace.participantUsage(p.id);
+  if (usage.total) {
+    const lines = [usage.transactions && plural(usage.transactions, 'transaction'), usage.commitments && plural(usage.commitments, 'funding commitment'),
+      usage.capitalAllocations && plural(usage.capitalAllocations, 'capital allocation')].filter(Boolean);
+    openDialog({ title: `${p.full_name} can’t be removed`, size: 'sm',
+      content: h('div', { class: 'confirm-body' }, h('p', null, `${p.full_name} is part of the financial history:`), h('ul', { class: 'plain-list dep-list' }, lines.map(l => h('li', null, l))),
+        h('p', null, 'Removing them would break those records, so the database refuses it. Reversed transactions and revoked commitments count too: they are kept as history.'),
+        h('p', null, p.is_active ? 'Deactivate them instead: their records stay intact and they stop appearing for new entries.' : 'They are already inactive, which keeps their records intact.')),
+      actions: [{ label: 'Close', kind: 'ghost' }, ...(p.is_active ? [{ label: 'Deactivate instead', kind: 'primary', run: () => { setActive(ctx, p, false); } }] : [])] });
+    return;
+  }
+  const equity = Number(p.agreed_equity_percentage) > 0;
+  const ok = await confirmDialog({ title: `Remove ${p.full_name}?`, danger: true, confirmLabel: 'Remove participant',
+    body: h('div', null, h('p', null, h('strong', null, p.full_name), ` · ${p.participant_type}${p.designation ? ` · ${p.designation}` : ''}`),
+      h('p', null, 'No transactions, funding commitments or capital allocations refer to them, so nothing else changes.'),
+      h('p', null, `Their participant record is deleted permanently: name, contact details${equity ? `, and the agreed equity of ${p.agreed_equity_percentage}%` : ''}. This can’t be undone.`),
+      equity && h('p', { class: 'fg-warn' }, 'Agreed ownership will no longer include this share.')) });
+  if (!ok) return;
+  try { await ctx.data.workspace.removeParticipant(p.id); ctx.toast(`${p.full_name} removed`); }
+  catch (e) { ctx.toast(e.code === '23503' ? `${p.full_name} now has financial records, so they can’t be removed. Deactivate them instead.` : friendlyError(e).message, { tone: 'bad' }); }
+}
+
+function participantRow(ctx, p, allParticipants) {
   const typeTone = p.participant_type === 'founder' ? 'accent' : p.participant_type === 'cofounder' ? 'ok' : 'idle';
-  return h('div', { class: 'row participant-row', role: 'listitem' },
+  const owner = isOwner(ctx, p);
+  return h('div', { class: ['row', 'participant-row', !p.is_active && 'is-muted'], role: 'listitem' },
     avatar(p.full_name, { size: 26 }),
-    h('button', { type: 'button', class: 'row-main', onclick: () => { /* panel not implemented yet */ } },
+    h('button', { type: 'button', class: 'row-main', title: `Edit ${p.full_name}`, onclick: () => participantDialog(ctx, p, allParticipants) },
       h('span', { class: 'row-title' }, p.full_name),
-      h('span', { class: 'row-sub' }, [p.designation, p.email].filter(Boolean).join(' · ') || '—')
-    ),
-    h('div', { class: 'row-meta' },
-      p.email && h('a', { class: 'link', href: `mailto:${p.email}` }, p.email),
-      h('span', { class: 'faint small' }, equity),
-      chip(p.participant_type, { tone: typeTone }),
-      p.is_active === false && chip('Inactive', { tone: 'bad' })
-    )
-  );
+      h('span', { class: 'row-sub' }, [p.designation, p.email, `${Number(p.agreed_equity_percentage).toFixed(2)}% equity`].filter(Boolean).join(' · '))),
+    h('div', { class: 'row-meta participant-meta' },
+      owner && chip('You', { tone: 'info' }), chip(p.participant_type, { tone: typeTone }), !p.is_active && chip('Inactive', { tone: 'idle' }),
+      button('Edit', { kind: 'ghost', size: 'sm', iconName: 'edit', aria: { label: `Edit ${p.full_name}` }, onClick: () => participantDialog(ctx, p, allParticipants) }),
+      !owner && (p.is_active ? button('Deactivate', { kind: 'ghost', size: 'sm', aria: { label: `Deactivate ${p.full_name}` }, onClick: () => setActive(ctx, p, false) })
+        : button('Reactivate', { kind: 'ghost', size: 'sm', iconName: 'refresh', aria: { label: `Reactivate ${p.full_name}` }, onClick: () => setActive(ctx, p, true) })),
+      button('Remove', { kind: 'ghost', size: 'sm', iconName: 'trash', aria: { label: `Remove ${p.full_name}` }, onClick: () => removeParticipant(ctx, p) })));
 }
 
 async function renderSettings(ctx, _params, _query) {
@@ -305,7 +331,8 @@ async function renderSettings(ctx, _params, _query) {
         h('h2', { class: 'section-title' }, `Participants · ${participants.length}`),
         h('div', { class: 'section-actions' }, button('Add participant', { kind: 'primary', size: 'sm', iconName: 'plus', onClick: () => participantDialog(ctx, null, participants) }))
       ),
-      participants.length ? h('div', { class: 'rows', role: 'list' }, participants.map(p => participantRow(p, participants))) :
+      h('p', { class: 'faint small' }, 'Anyone with transactions, funding commitments or capital allocations on record can be deactivated but not removed: their financial history stays intact.'),
+      participants.length ? h('div', { class: 'rows', role: 'list' }, [...participants].sort((x, y) => Number(y.is_active) - Number(x.is_active)).map(p => participantRow(ctx, p, participants))) :
       stateBlock('empty', { title: 'No participants yet', action: button('Add participant', { kind: 'primary', size: 'sm', iconName: 'plus', onClick: () => participantDialog(ctx, null, participants) }) })
     );
   };

@@ -70,12 +70,14 @@ export const TABLES = {
     columns: {
       id, business_id: businessId, profile_id: uuid, full_name: { ...text, notNull: true, len: [1, 200] },
       participant_type: { ...text, notNull: true, enum: ENUMS.participantType }, designation: text, email: text, phone: text,
-      agreed_equity_percentage: { type: 'numeric' }, avatar_storage_key: text, is_active: { type: 'bool', notNull: true, default: true },
+      agreed_equity_percentage: { type: 'numeric', scale: 2, notNull: true, default: '0.00' }, avatar_storage_key: text, is_active: { type: 'bool', notNull: true, default: true },
       notes: text, created_at: ts, updated_at: ts,
     },
     insert: ['business_id', 'profile_id', 'full_name', 'participant_type', 'designation', 'email', 'phone', 'agreed_equity_percentage', 'avatar_storage_key', 'is_active', 'notes'],
     update: ['profile_id', 'full_name', 'participant_type', 'designation', 'email', 'phone', 'agreed_equity_percentage', 'avatar_storage_key', 'is_active', 'notes'],
     delete: true,
+    // numeric(5,2) NOT NULL DEFAULT 0 CHECK (agreed_equity_percentage BETWEEN 0 AND 100)
+    checks: [r => { const v = String(r.agreed_equity_percentage).trim(); return (v !== '' && Number.isFinite(+v) && +v >= 0 && +v <= 100) || 'participants_agreed_equity_percentage_check'; }],
   },
   activity_records: {
     // append-only; written only by server triggers and RPCs (no client INSERT, no UPDATE/DELETE for anyone)

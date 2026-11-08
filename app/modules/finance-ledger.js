@@ -21,6 +21,8 @@ const kindSelect = (value) => {
 export async function transactionDialog(ctx, preset = {}) {
   const [accounts, categories, participants, settlements] = await Promise.all([ctx.data.accounts.list(), ctx.data.accounts.categories(), ctx.data.workspace.participants(), ctx.data.transactions.settlements()]);
   const live = accounts.filter(a => a.is_active);
+  const owedTo = new Set(settlements.filter(s => Number(s.outstanding_amount) > 0).map(s => s.participant_id));
+  const people = participants.filter(p => p.is_active || owedTo.has(p.id) || p.id === preset.participant_id);
   const main = live.filter(a => ['bank', 'cash'].includes(a.account_type)); // default to accounts that hold available cash
   const kind = kindSelect(preset.kind || 'expense');
   const f = {
@@ -29,7 +31,7 @@ export async function transactionDialog(ctx, preset = {}) {
     description: input({ maxlength: 500, value: preset.description || '' }),
     account_id: select(live.map(a => [a.id, a.name]), { value: preset.account_id || main[0]?.id || live[0]?.id }),
     transfer_to_account_id: select(live.map(a => [a.id, a.name]), { value: main[1]?.id || live[1]?.id }),
-    participant_id: select(participants.map(p => [p.id, p.full_name]), { value: preset.participant_id || participants[0]?.id }),
+    participant_id: select(people.map(p => [p.id, p.is_active ? p.full_name : `${p.full_name} (inactive)`]), { value: preset.participant_id || people[0]?.id }),
     settles_transaction_id: h('select', { class: 'input select' }),
     category_id: h('select', { class: 'input select' }),
     funding: select(THIRD_PARTY, { value: 'third_party_equity' }),

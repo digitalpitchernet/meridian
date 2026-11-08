@@ -85,9 +85,9 @@ export function createFixtureAdapter({ seed, session, storage = null, storageKey
     if (c.type === 'bool' && typeof v !== 'boolean') fail('boolean');
   }
 
-  // numeric(15,2) input is rounded and stored as 2-decimal numeric text, as Postgres does
+  // numeric(15,2) and numeric(5,2) input is rounded and stored as 2-decimal numeric text, as Postgres does
   function coerce(table, row) {
-    for (const [col, c] of Object.entries(spec(table).columns)) if (c.type === 'money' && row[col] != null) row[col] = fromCents(toCents(row[col], col));
+    for (const [col, c] of Object.entries(spec(table).columns)) if ((c.type === 'money' || c.scale === 2) && row[col] != null) row[col] = fromCents(toCents(row[col], col));
   }
 
   function validate(table, row, self = null) {

@@ -102,7 +102,7 @@ With XAMPP's Apache running it is also at `http://localhost/meridian/app/`. `app
 the repository root stays denied.
 
 ```bash
-node --test "tests/app/*.test.mjs"   # 68 tests: core, data adapter, projections, M2, finance (incl. SQL parity), vault, reports
+node --test "tests/app/*.test.mjs"   # 75 tests: core, data adapter, projections, M2, finance (incl. SQL parity), vault, reports, participants
 ```
 
 ## Data: development fixtures, no backend
@@ -169,6 +169,17 @@ Connecting the backend later means adding `adapters/supabase.js` with the same i
 8. **The "Current" projects view** is Planning + Active + On Hold, ordered Active, Planning, On Hold.
 9. **State previews:** in development only, `#/command?state=loading|empty|error|stale` renders every Command Centre
    panel in that state, for design review.
+
+## Settings: participant management
+
+`participants` can be deleted by the client, but `transactions`, `funding_commitments` and
+`participant_capital_allocations` reference it `ON DELETE RESTRICT`. Settings therefore checks first:
+- **No financial records:** *Remove* is offered, with a confirmation that names the participant and states what is deleted (including any agreed equity).
+- **Any transaction (reversed ones too), commitment or capital allocation:** the dialog lists them and offers *Deactivate* (`is_active`, an existing column) instead. Every record stays intact, and they can be reactivated.
+- **Inactive participants** are not offered for new commitments or capital allocations. They remain available for new transactions while money is still owed to them, so loans and reimbursements can be repaid. Their figures stay in Capital and Reports, marked inactive.
+- **App rule:** the participant linked to the signed-in founder's profile (`profile_id`) is the account owner's record and is neither removable nor deactivatable from Settings.
+
+No schema change was needed.
 
 ## Known limits
 

@@ -46,7 +46,8 @@ function targetDialog(ctx, structureId, existing = null) {
 async function allocationDialog(ctx, structureId, targets, existing = null) {
   const a = existing || {};
   const participants = await ctx.data.workspace.participants();
-  const f = { participant_id: select(participants.map(p => [p.id, p.full_name]), { value: a.participant_id || participants[0]?.id, disabled: !!existing }),
+  const people = participants.filter(p => p.is_active || p.id === a.participant_id);
+  const f = { participant_id: select(people.map(p => [p.id, p.full_name]), { value: a.participant_id || people[0]?.id, disabled: !!existing }),
     capital_target_id: select(targets.map(t => [t.id, t.name]), { value: a.capital_target_id || '', placeholder: 'The structure as a whole' }),
     allocated_amount: input({ value: a.allocated_amount || '', inputmode: 'decimal', autofocus: true }), basis_notes: input({ value: a.basis_notes || '' }) };
   const active = h('input', { type: 'checkbox', checked: existing ? a.is_active : true });
@@ -73,7 +74,7 @@ export async function renderCapital(ctx) {
         h('p', { class: 'faint small' }, 'Kept as separate figures and never netted. Agreed ownership is a separate record; money and allocations never change it.'),
         h('div', { class: 'table-scroll' }, h('table', { class: 'fin-table' },
           h('thead', null, h('tr', null, ['Participant', 'Agreed equity', 'Capital allocated', 'Capital contributed', 'Commitments outstanding', 'Loans advanced', 'Loans outstanding', 'Reimbursements owed'].map((x, i) => h('th', { class: i ? 'num' : null, scope: 'col' }, x)))),
-          h('tbody', null, contributions.map(c => h('tr', null, h('th', { scope: 'row' }, c.full_name, h('span', { class: 'faint small' }, ` · ${c.participant_type}`)),
+          h('tbody', null, contributions.map(c => h('tr', null, h('th', { scope: 'row' }, c.full_name, h('span', { class: 'faint small' }, ` · ${c.participant_type}${participants.find(p => p.id === c.participant_id)?.is_active === false ? ' · inactive' : ''}`)),
             h('td', { class: 'num' }, c.agreed_equity_percentage != null ? `${c.agreed_equity_percentage}%` : '—'),
             ...['capital_allocated', 'capital_contributed', 'commitments_outstanding', 'loans_advanced', 'loans_outstanding', 'reimbursements_owed'].map(k => h('td', { class: ['num', Number(c[k]) === 0 && 'faint'] }, fmt(ctx, c[k]))))))))),
       structures.length ? structures.map(s => {

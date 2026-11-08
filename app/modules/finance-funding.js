@@ -42,7 +42,7 @@ export async function requirementDialog(ctx, existing = null) {
 export async function commitmentDialog(ctx, requirementId, existing = null) {
   const c = existing || {};
   const participants = await ctx.data.workspace.participants();
-  const who = select(participants.map(p => [p.id, p.full_name]), { value: c.participant_id || '', placeholder: 'An outside funder (no participant)', disabled: !!existing });
+  const who = select(participants.filter(p => p.is_active || p.id === c.participant_id).map(p => [p.id, p.full_name]), { value: c.participant_id || '', placeholder: 'An outside funder (no participant)', disabled: !!existing });
   const f = {
     funder_name: input({ value: c.funder_name || '', maxlength: 200, autofocus: true }), committed_amount: input({ value: c.committed_amount || '', inputmode: 'decimal' }),
     expected_payment_date: dateInput({ value: c.expected_payment_date || '' }), notes: textarea({ value: c.notes || '', rows: 2 }),

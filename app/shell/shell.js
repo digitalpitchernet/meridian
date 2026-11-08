@@ -39,7 +39,7 @@ export function createShell(ctx) {
       h('a', { class: 'dev-badge', href: '#/settings', title: ctx.dataSource.description },
         icon('beaker', { size: 14 }), h('span', null, 'Development data'), h('span', { class: 'dev-badge-sub' }, 'fictional · no backend')),
       h('div', { class: 'me' }, avatar(ctx.profile.full_name, { size: 26 }),
-        h('div', { class: 'me-text' }, h('span', { class: 'me-name' }, ctx.profile.full_name), h('span', { class: 'me-role' }, ctx.profile.role_title || 'Founder')),
+        h('div', { class: 'me-text', title: `${ctx.profile.full_name} · ${ctx.profile.role_title || 'Founder'}` }, h('span', { class: 'me-name' }, ctx.profile.full_name), h('span', { class: 'me-role' }, ctx.profile.role_title || 'Founder')),
         themeSeg)));
 
   const menuBtn = button('', { kind: 'ghost', iconName: 'menu', title: 'Open navigation', cls: 'menu-btn', onClick: () => setNav(true) });
