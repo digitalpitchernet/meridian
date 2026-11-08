@@ -3,6 +3,60 @@
 For independent review. Nothing was executed in any round: no target project, no drill run, no write to either
 validation project, no D1, migrations unchanged, Gate 2 paused.
 
+## P-6 cleanup hardening (8 Nov 2026): P-6 still OPEN — UNVERIFIED
+
+**Defect found in review.** After a failed `pg_ctl stop`, the harness treated **any** failure of `pg_ctl status` as
+"not running". That covered exit 4, exit 1, a launch failure and a timeout, not only the documented exit 3. So cleanup
+could be reported as successful while a server might still be running, and the data directory was then deleted anyway.
+
+**Correction** (`pgctl.mjs`, used by `psql.test.mjs`):
+- **Status classification:** `pg_ctl status` exit 0 = running, exit 3 = stopped (the documented code). Everything else
+  is **unknown**: exit 4, exit 1, a launch failure, a timeout, or death by signal.
+- **Status after every stop:** status is checked after every stop attempt, even one that reported success. If the
+  server is not confirmed stopped after the graceful stop (`-m fast`), an immediate stop follows and is checked again.
+- **Folder deletion:** the temp folder is deleted only if no start was attempted or the server is confirmed stopped.
+  Otherwise the data directory is **preserved**, its exact path printed, and the test fails.
+- **Hard assertion:** the exit code is non-zero unless the server is confirmed stopped **and** the folder is removed.
+  The last line is `RESULT PASS` or `RESULT FAIL`, with the assertion and cleanup outcomes.
+- **Timeouts:** every `pg_ctl`, `initdb`, `postgres` and `psql` call in the test has a 120 s timeout.
+- **Expected failures must be genuine:** a test step that expects failure now counts only a genuine non-zero psql
+  exit. A timeout, signal or launch failure is re-thrown, so it can't pass as the rollback being tested.
+- **One shared-module change:** `psql.mjs` `run()` takes an optional options argument. `drill.mjs` passes none, so the
+  drill's calls are unchanged.
+- **Wording:** comments and the runbook no longer say `psql.test.mjs` "proves" atomicity. **Not changed** (outside
+  this round's scope): `drill.mjs` line 135 still says "proven by psql.test.mjs"; correct it with the next authorised
+  drill change.
+
+**Tests run on this machine** (Windows, Node 24.15, PostgreSQL 17.11 client tools only; nothing installed; no Supabase):
+
+| Test | Result |
+|---|---|
+| `pgctl.test.mjs` part 1, classification: exit 3 → stopped; exit 4, 1, 2 → unknown; ENOENT, EACCES, timeout, signal and empty errors → unknown; no error → running | pass |
+| `pgctl.test.mjs` part 1, cleanup decisions with a scripted `pg_ctl` (cases below) | pass |
+| `pgctl.test.mjs` part 2, **installed** `pg_ctl` 17.11 on throwaway folders: missing folder → `unknown (4)`; non-cluster folder → `unknown (4)`; cluster with no PID file → `stopped`; stale PID file → `stopped`; missing binary → `unknown (ENOENT)`; temp folder removed | pass |
+| `compare`, `migrations`, `paths`, `evidence` tests | pass |
+| `psql.test.mjs`, the only path reachable here (`initdb` fails: no `postgres.bki`) | `cleanup: start_attempted false, server "not started", dir_removed true, ok true`; `RESULT FAIL (assertions did not complete; cleanup ok)`; **exit 1**; 0 leftover temp folders |
+
+**Cleanup behaviour by case** (scripted `pg_ctl`; the real lifecycle is still untested):
+
+| Case | pg_ctl calls | Folder | ok |
+|---|---|---|---|
+| no start attempted (initdb failed) | none | removed | yes, but the test still fails because the assertions did not run |
+| normal: graceful stop ok, status 3 | stop fast, status | removed | yes |
+| start never completed: stop fails (no PID file), status 3 | stop fast, status | removed | yes |
+| graceful "ok" but status 0 | stop fast, status, stop immediate, status (3) | removed | yes |
+| graceful timeout, server running, immediate ok | stop fast, status, stop immediate, status (3) | removed | yes |
+| both stops fail, still running | + immediate, status (0) | **preserved**, path printed | **no** |
+| status exit 4, exit 1, ENOENT or timeout after both stops | + immediate, status | **preserved**, path printed | **no** |
+| confirmed stopped but folder removal fails or the folder remains | stop fast, status | not removed | **no** |
+
+**Still untested, so P-6 cannot pass:**
+- real `initdb` and `pg_ctl start`;
+- the real start-failure path;
+- shutdown after a successful run;
+- a real "still running" or "unknown" state;
+- every PostgreSQL atomicity assertion (listed in the P-6 evidence section below).
+
 ## P-6 evidence (8 Nov 2026): OPEN — UNVERIFIED, execution blocked
 
 **Harness correction** (`tests/recovery/psql.test.mjs`):

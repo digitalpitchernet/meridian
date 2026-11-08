@@ -20,11 +20,12 @@ either proven exact, classified as platform-generated with a stated reason, or f
 | `tests/recovery/compare.mjs` (+ `.test.mjs`) | diff and classification (exact / platform_generated / platform_version / unexpected) |
 | `tests/recovery/paths.mjs` (+ `.test.mjs`) | Storage URL path encoding, per segment, separators kept |
 | `tests/recovery/psql.mjs` (+ `.test.mjs`) | the exact R-02 and R-05 psql invocations; the test runs them on a throwaway local cluster |
+| `tests/recovery/pgctl.mjs` (+ `.test.mjs`) | `pg_ctl status` classification (0 running, 3 stopped, anything else unknown) and the cleanup decision used by `psql.test.mjs` |
 | `tests/recovery/evidence.mjs` (+ `.test.mjs`) | durable evidence writes; API outcome classification for R-16 |
 | `tests/recovery/orphans.sql` | A4: 84 public foreign keys + `auth.identities.user_id → auth.users.id` |
 
-Self-tests that need no network or credentials: `compare.test.mjs`, `migrations.test.mjs`, `paths.test.mjs` and
-`evidence.test.mjs`. `psql.test.mjs` also needs local PostgreSQL 15+ **server** binaries (`initdb`, `pg_ctl`, `postgres`).
+Self-tests that need no network or credentials: `compare.test.mjs`, `migrations.test.mjs`, `paths.test.mjs`,
+`evidence.test.mjs` and `pgctl.test.mjs` (part 2 uses the installed `pg_ctl` client on throwaway folders; no server). `psql.test.mjs` also needs local PostgreSQL 15+ **server** binaries (`initdb`, `pg_ctl`, `postgres`).
 It creates a throwaway cluster on 127.0.0.1 in the OS temp folder and deletes it afterwards. It never connects to Supabase.
 
 | | Source | Target |
@@ -81,7 +82,7 @@ URI shape: `postgresql://postgres.<ref>:<password>@aws-<n>-ap-south-1.pooler.sup
 | P-3 | Gavin (MCP) | Target empty: 0 public tables, 0 objects, 0 users, 0 buckets; Postgres 17.x | all zero |
 | P-4 | Gavin (MCP) | `platform-schema.sql` on both: identical `tables` section (the drill repeats this as R-01a), and compare `platform_versions` (R-01b). The target is created later than the source, so Supabase may have updated GoTrue or Storage in between. If so, the difference is identified and reviewed **before** the run (§4 step 2) | identical, or reviewed and accepted |
 | P-5 | Founder | Dry-run read of the source in your own terminal: `& "C:\Program Files\PostgreSQL\17\bin\pg_dump.exe" "<SOURCE_DB_URL>" --data-only -t auth.users -f tests\recovery\.work\dryrun.sql`, then delete the file | exit 0, non-empty |
-| P-6 | Gavin or the reviewer | `node tests/recovery/psql.test.mjs` on a machine with PostgreSQL 15+ **server** binaries (throwaway local cluster; never Supabase). **Status: OPEN — UNVERIFIED. Execution is blocked until the full test passes.** No suitable environment exists: the founder's machine has the PostgreSQL 17.11 client tools only (no `share/postgres.bki`), no WSL distribution, no Docker or Podman. Downloading server binaries was declined (8 Nov 2026). See "P-6 evidence" in the change report | all assertions pass; required before execution |
+| P-6 | Gavin or the reviewer | `node tests/recovery/psql.test.mjs` on a machine with PostgreSQL 15+ **server** binaries (throwaway local cluster; never Supabase). **Status: OPEN — UNVERIFIED. Execution is blocked until the full test passes.** No suitable environment exists: the founder's machine has the PostgreSQL 17.11 client tools only (no `share/postgres.bki`), no WSL distribution, no Docker or Podman. Downloading server binaries was declined (8 Nov 2026). Next: Option A, an existing isolated machine with PostgreSQL 17.11 server binaries. See "P-6 evidence" in the change report | all assertions pass **and** the final line is `RESULT PASS` (server confirmed stopped, temp folder removed); required before execution |
 
 ---
 
@@ -143,7 +144,8 @@ deleted after the drill (§8 step 9).
    documentation for `-1`). So a migration and its history row commit together or not at all. The documented
    exceptions are transaction control inside the file and statements that cannot run in a transaction block. The
    first is refused by R-00 (as is `\q`, which would end stdin early and commit a partial file). The second makes the
-   whole call fail, which is still atomic. `psql.test.mjs` proves this on a throwaway cluster:
+   whole call fail, which is still atomic. `psql.test.mjs` is written to prove this on a throwaway cluster, but **has
+   not been executed** (P-6 OPEN — UNVERIFIED). It checks that:
    - success commits both;
    - an error mid-file leaves neither;
    - a failing history insert (duplicate version) rolls back the file's SQL;
@@ -158,8 +160,8 @@ deleted after the drill (§8 step 9).
    \i data.sql
    SET session_replication_role = origin;
    ```
-   Same psql mechanism as R-02 (`restoreArgs` in `psql.mjs`); `psql.test.mjs` shows that a failing dump leaves no rows
-   and undoes the TRUNCATE, and that replica mode really skipped an ordinary trigger and an FK during the load.
+   Same psql mechanism as R-02 (`restoreArgs` in `psql.mjs`); `psql.test.mjs` (not yet executed) checks that a failing dump leaves no rows
+   and undoes the TRUNCATE, and that replica mode skips an ordinary trigger and an FK during the load.
    Replica mode stops guard, immutability and activity triggers from re-firing on reloaded history. It also skips FK
    triggers, so integrity is re-checked in R-14. CHECK, NOT NULL and UNIQUE are still enforced. Any error rolls the
    whole restore back. `installation_settings.max_workspaces` comes back as 2, the validation value.

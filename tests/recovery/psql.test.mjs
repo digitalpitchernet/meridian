@@ -11,20 +11,29 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
 import { run, migrationArgs, restoreArgs } from './psql.mjs';
+import { cleanupCluster, TIMEOUT_MS } from './pgctl.mjs';
 
 const BIN = process.env.PG_BIN || 'C:\\Program Files\\PostgreSQL\\17\\bin';
 const exe = n => join(BIN, process.platform === 'win32' ? `${n}.exe` : n);
 const port = await new Promise(r => { const s = createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
 const dir = mkdtempSync(join(tmpdir(), 'meridian-psql-test-'));
 const data = join(dir, 'data'), url = `postgresql://postgres@127.0.0.1:${port}/postgres`;
-const sh = (n, args) => execFileSync(exe(n), args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-const val = sql => run(exe('psql'), url, ['-At', '-c', sql]).trim();
-const fails = (args, input) => { try { run(exe('psql'), url, args, input); return false; } catch { return true; } };
+// every pg_ctl, initdb, postgres and psql call has a 120 s timeout
+const sh = (n, args) => execFileSync(exe(n), args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: TIMEOUT_MS });
+const p = (args, input) => run(exe('psql'), url, args, input, { timeout: TIMEOUT_MS });
+const val = sql => p(['-At', '-c', sql]).trim();
+// An expected failure must be psql exiting non-zero by itself. A timeout, a signal or a launch failure is not the
+// rollback being tested, so it is re-thrown and fails the test instead of counting as "failed as expected".
+const fails = (args, input) => {
+  try { p(args, input); return false; }
+  catch (e) { if (typeof e.status === 'number' && e.status !== 0 && !e.signal) return true; throw e; }
+};
 
-// Cleanup runs on every path, including initdb or pg_ctl start failing: the temp folder is always removed, and once a
-// start has been attempted the server is always stopped (pg_ctl -w can fail after the postmaster has launched).
-let startAttempted = false;
-const cleanup = { server: 'never started', dir_removed: false };
+// Cleanup (pgctl.mjs cleanupCluster) runs on every path. Once a start has been attempted it stops the server
+// (graceful, then immediate if not confirmed) and checks pg_ctl status after every stop attempt. The temp folder is
+// deleted only if the server is confirmed stopped; otherwise it is preserved and its path printed. The test exits
+// non-zero unless the server is confirmed stopped AND the folder is removed (a hard assertion).
+let startAttempted = false, assertionsPassed = false;
 try {
   console.log(`binaries: ${sh('postgres', ['--version']).trim()} | ${sh('initdb', ['--version']).trim()} | ${sh('psql', ['--version']).trim()}`);
   sh('initdb', ['-D', data, '-U', 'postgres', '-A', 'trust', '-E', 'UTF8', '--no-sync']);
@@ -32,12 +41,12 @@ try {
   sh('pg_ctl', ['-D', data, '-l', join(dir, 'log.txt'), '-o', `-p ${port} -c listen_addresses=127.0.0.1`, '-w', 'start']);
   const version = val('show server_version');
   assert.ok(Number(version.split('.')[0]) >= 15, `needs PostgreSQL 15+, got ${version}`);
-  run(exe('psql'), url, ['-c', 'create schema supabase_migrations; create table supabase_migrations.schema_migrations (version text primary key, statements text[], name text); create schema public_test']);
+  p(['-c', 'create schema supabase_migrations; create table supabase_migrations.schema_migrations (version text primary key, statements text[], name text); create schema public_test']);
   const history = v => val(`select count(*) from supabase_migrations.schema_migrations where version = '${v}'`);
   const exists = t => val(`select to_regclass('${t}') is not null`);
 
   // 1. success: the file's SQL and its history row both commit
-  run(exe('psql'), url, migrationArgs('20990101000001', 'ok'), Buffer.from('create table m_ok (id int);\ninsert into m_ok values (1);\n'));
+  p(migrationArgs('20990101000001', 'ok'), Buffer.from('create table m_ok (id int);\ninsert into m_ok values (1);\n'));
   assert.equal(exists('m_ok'), 't'); assert.equal(history('20990101000001'), '1');
 
   // 2. failure in the middle of the file: nothing from the file, no history row
@@ -58,7 +67,7 @@ try {
   assert.equal(exists('m_commit'), 't'); assert.equal(history('20990101000005'), '0');
 
   // 6. restore: all-or-nothing, and replica mode really skips ordinary and FK triggers during the load
-  run(exe('psql'), url, ['-c', `create table installation_settings (id int);
+  p(['-c', `create table installation_settings (id int);
     create table parent (id int primary key); create table child (id int, parent_id int references parent (id));
     create function no_insert() returns trigger language plpgsql as $$ begin raise exception 'guard fired'; end $$;
     create trigger guard before insert on child for each row execute function no_insert();
@@ -67,7 +76,7 @@ try {
   writeFileSync(good, 'insert into child values (1, 999);\ninsert into installation_settings values (2);\n'); // FK orphan + guard: allowed in replica mode
   writeFileSync(bad, 'insert into child values (2, 998);\ninsert into child values (3, \'x\');\n');            // type error on line 2
   const restore = f => restoreArgs(f).map(a => a.replace('public.installation_settings', 'installation_settings'));
-  run(exe('psql'), url, restore(good));
+  p(restore(good));
   assert.equal(val('select count(*) from child'), '1');                       // guard and FK skipped: replica mode was in force
   assert.equal(val('select string_agg(id::text, \',\') from installation_settings'), '2'); // TRUNCATE then the dumped row
   assert.ok(fails(restore(bad)));
@@ -75,17 +84,14 @@ try {
   assert.equal(val('select string_agg(id::text, \',\') from installation_settings'), '2'); // the TRUNCATE was rolled back too
   assert.equal(val('show session_replication_role'), 'origin');                // a new session is not left in replica mode
 
-  console.log(`psql.mjs: all assertions passed on throwaway PostgreSQL ${version} (port ${port})`);
+  assertionsPassed = true;
+  console.log(`psql.mjs: all atomicity assertions passed on throwaway PostgreSQL ${version} (port ${port})`);
 } finally {
-  if (startAttempted) {
-    try { sh('pg_ctl', ['-D', data, '-m', 'fast', '-w', 'stop']); cleanup.server = 'stopped'; }
-    catch { // stop fails when start never got that far; pg_ctl status tells which (exit 3 = not running)
-      let running = false; try { sh('pg_ctl', ['-D', data, 'status']); running = true; } catch {}
-      cleanup.server = running ? 'STOP FAILED: still running' : 'not running (start had not completed)';
-    }
-  }
-  try { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch (e) { cleanup.error = e.message; }
-  cleanup.dir_removed = !existsSync(dir);
-  console.log(`cleanup: ${JSON.stringify({ dir, ...cleanup })}`);
-  if (!cleanup.dir_removed || cleanup.server.startsWith('STOP FAILED')) process.exitCode = 1;
+  const c = cleanupCluster({ startAttempted, dataDir: data, tempDir: dir,
+    pgctl: args => sh('pg_ctl', ['-D', data, ...args]),
+    removeDir: d => rmSync(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }), dirExists: existsSync });
+  console.log(`cleanup: ${JSON.stringify(c)}`);
+  if (c.dir_preserved) console.error(`CLEANUP: server state "${c.server}" not confirmed stopped; data directory preserved for a manual stop: ${c.dir_preserved}`);
+  if (!c.ok) process.exitCode = 1;
+  console.log(`RESULT ${assertionsPassed && c.ok ? 'PASS' : 'FAIL'} (assertions ${assertionsPassed ? 'passed' : 'did not complete'}; cleanup ${c.ok ? 'ok' : 'FAILED'})`);
 }
