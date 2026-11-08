@@ -10,6 +10,7 @@ import { decisionsModule } from './decisions.js';
 import { financesModule } from './finances.js';
 import { settingsModule } from './settings.js';
 import { vaultModule } from './vault.js';
+import { reportsModule } from './reports.js';
 
 export const BUILT = {
   command: commandModule,
@@ -22,4 +23,5 @@ export const BUILT = {
   finances: financesModule,
   settings: settingsModule,
   vault: vaultModule,
+  reports: reportsModule,
 };

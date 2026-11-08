@@ -9,6 +9,9 @@ import { TASK_STATUS, MILESTONE_STATUS, statusIcon, priorityIcon } from '../ui/s
 import { formatShortDate, relativeDay, formatTime, timeAgo, addDays, daysBetween, formatCount } from '../core/format.js';
 import { kpis, attention, activeProjects, schedule, describeActivity } from './projections.js';
 import { statusButton, dueLabel, openTaskPanel } from './tasks.js';
+import { financeSnapshot } from './reporting.js';
+import { fmt, bar } from './finance-ui.js';
+import { toCents } from '../data/money.js';
 
 const STALE_MS = 5 * 60 * 1000;
 const SPAN = { kpi: 12, attention: 7, projects: 5, finance: 6, funding: 6, schedule: 7, activity: 5 };
@@ -21,7 +24,9 @@ async function loadAll(ctx) {
     ctx.data.tasks.list(), ctx.data.projects.list(), ctx.data.milestones.list(),
     ctx.data.calendar.between(new Date(`${today}T00:00:00Z`).toISOString(), new Date(`${addDays(today, 16)}T00:00:00Z`).toISOString()),
     ctx.data.activity.recent(8), ctx.data.decisions.list()]);
-  return { today, tasks, projects, milestones, events, activity, decisions };
+  // finance failures must not take the other panels down: they render their own error state
+  const finance = await financeSnapshot(ctx.data, today).catch(e => { console.error(e); return null; });
+  return { today, tasks, projects, milestones, events, activity, decisions, finance };
 }
 
 function panel(id, body, { meta } = {}) {
@@ -44,7 +49,8 @@ function kpiStrip(ctx, d) {
     cell('Overdue', String(k.overdue), { tone: k.overdue ? 'bad' : 'ok', sub: k.overdue ? 'needs a decision' : 'all clear', href: '#/tasks' }),
     cell('Active projects', String(k.activeProjects), { href: '#/projects?view=Active' }),
     cell('Milestones · 14 days', String(k.milestonesNext14), { tone: k.lateMilestones ? 'late' : null, sub: k.lateMilestones ? `${k.lateMilestones} late` : null }),
-    h('div', { class: 'kpi kpi-off', title: 'Finances arrive in M3' }, h('span', { class: 'kpi-label' }, 'Available cash'), h('span', { class: 'kpi-value kpi-na' }, 'Not connected'), h('span', { class: 'kpi-sub' }, 'Finances · M3')));
+    d.finance ? cell('Available cash', fmt(ctx, d.finance.cash), { href: '#/finances', sub: ctx.dataSource.kind === 'development' ? 'fictional · today' : 'today' })
+      : h('div', { class: 'kpi kpi-off' }, h('span', { class: 'kpi-label' }, 'Available cash'), h('span', { class: 'kpi-value kpi-na' }, 'Unavailable')));
 }
 
 function attentionList(ctx, d) {
@@ -89,10 +95,29 @@ function projectsList(ctx, d) {
   }));
 }
 
-function financeUnavailable(kind) {
-  return stateBlock('unavailable', kind === 'finance'
-    ? { title: 'Not connected yet', body: 'Arrives with Finances (M3): available cash as of today from get_available_cash, account balances and runway. No figures are shown until real ledger data exists.' }
-    : { title: 'Not connected yet', body: 'Arrives with Finances (M3): requirements, commitments and what has actually been received. A pledge is not cash, so nothing is estimated here.' });
+// Finance panels: the same financeSnapshot() as Reports (as of business-local today), so both show identical figures.
+function financePanel(ctx, d) {
+  const s = d.finance;
+  if (!s) return stateBlock('error', { title: 'Finances could not load' });
+  const counted = s.balances.filter(b => b.counts_as_available_cash);
+  return h('div', { class: 'ccf' },
+    h('div', { class: 'ccf-hero' }, h('span', { class: 'fig-label' }, 'Available cash today'), h('span', { class: 'ccf-cash num' }, fmt(ctx, s.cash)),
+      h('span', { class: 'fig-sub' }, `${counted.length} bank and cash account${counted.length === 1 ? '' : 's'}; credit and escrow not counted`)),
+    h('ul', { class: 'ccf-list' }, s.balances.map(b => h('li', { class: !b.counts_as_available_cash && 'faint' }, h('span', { class: 'ellipsis' }, b.name), h('span', { class: 'num' }, fmt(ctx, b.balance))))),
+    toCents(s.owed.total) > 0 && h('a', { class: 'ccf-owed', href: '#/finances' }, h('span', null, 'Owed to participants'), h('span', { class: 'num fg-warn' }, fmt(ctx, s.owed.total))),
+    h('p', { class: 'faint small' }, 'Burn and runway: no approved calculation yet.'));
+}
+
+function fundingPanel(ctx, d) {
+  const f = d.finance?.funding;
+  if (!f) return stateBlock('error', { title: 'Funding could not load' });
+  const reqs = f.requirements.filter(r => r.lifecycle === 'open' || r.lifecycle === 'draft');
+  return h('div', { class: 'ccf' },
+    h('div', { class: 'ccf-trio' }, [['Committed', f.committed, 'pledges, not money'], ['Received', f.received, 'cash allocated'], ['Outstanding', f.outstanding, 'still pledged']].map(([l, v, sub]) =>
+      h('div', null, h('span', { class: 'fig-label' }, l), h('span', { class: 'num ccf-mid' }, fmt(ctx, v)), h('span', { class: 'fig-sub' }, sub)))),
+    reqs.length ? h('ul', { class: 'ccf-reqs' }, reqs.map(r => h('li', null, h('a', { class: 'ccf-req', href: `#/finances/funding/${r.requirement_id}` }, h('span', { class: 'ellipsis' }, r.title),
+      h('span', { class: 'num faint small' }, `${fmt(ctx, r.received_amount)} of ${fmt(ctx, r.required_amount)}`)), bar(r.received_amount, r.required_amount, { tone: 'ok' }))))
+      : stateBlock('empty', { title: 'No open funding requirements' }));
 }
 
 function scheduleList(ctx, d) {
@@ -127,7 +152,7 @@ function activityList(ctx, d) {
   }));
 }
 
-const RENDER = { kpi: kpiStrip, attention: attentionList, projects: projectsList, finance: () => financeUnavailable('finance'), funding: () => financeUnavailable('funding'), schedule: scheduleList, activity: activityList };
+const RENDER = { kpi: kpiStrip, attention: attentionList, projects: projectsList, finance: financePanel, funding: fundingPanel, schedule: scheduleList, activity: activityList };
 
 // ---------- page ----------
 async function renderCommand(ctx, _params, query) {
@@ -157,7 +182,7 @@ async function renderCommand(ctx, _params, query) {
     loadedAt = Date.now();
     mount(grid, order.map(id => {
       if (forced === 'error' || error) return panel(id, stateBlock('error', { title: 'Couldn’t load this', body: error?.message || 'Simulated error (development state preview).', action: button('Retry', { kind: 'secondary', size: 'sm', onClick: draw }) }));
-      if (forced === 'empty') return panel(id, id === 'finance' || id === 'funding' ? RENDER[id]() : stateBlock('empty', { title: 'Nothing here yet' }));
+      if (forced === 'empty') return panel(id, stateBlock('empty', { title: 'Nothing here yet' }));
       try { return panel(id, RENDER[id](ctx, d)); }
       catch (e) { console.error(e); return panel(id, stateBlock('error', { title: 'This panel failed', body: e.message })); }
     }));

@@ -57,3 +57,15 @@ Reconciliation of the 17 items from the Gate 1 report. Items already implemented
 A17 constraint (founder, M4.2 authorisation): the approved Vault caching design (no residual access to deleted or revoked
 documents) does not authorise any production CDN, storage or infrastructure change. Its implementation stays gated and is
 part of the future Vault engineering assurance work. The development Vault stores no files, so nothing is cached.
+
+## 8 Nov 2026: M4.2 Company Vault dispositions (app/README.md, "M4.2: Company Vault, contract notes")
+
+Accepted with M4.2 at `5c35ea5`. No migration or backend change follows from any of them.
+
+| ID | Topic | Decision | Status | Follow-up |
+|---|---|---|---|---|
+| V-1 | Metadata-only behaviour | Keep the explicit "metadata only / no file stored" warnings. Never imply a file is stored or downloadable when it is not | **Accepted** | Applies until real storage integration is authorised |
+| V-2 | No "not yet uploaded" state in `documents` | Deferred until real storage integration | **Deferred** | Assess with the storage integration (upload must precede the row) |
+| V-3 | Linear version history | Accepted as a V1 application rule (new versions only on the latest version) | **Accepted** | Database enforcement to be assessed in future schema hardening |
+| V-4 | `is_archived` is per version row | Whole-chain archive and restore accepted for V1 | **Accepted** | none |
+| V-6 | Vault caching (= A17) | Design approval retained; no infrastructure implementation is authorised | **Accepted** (design only) | Future Vault engineering assurance work |

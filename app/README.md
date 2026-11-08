@@ -1,4 +1,4 @@
-# Meridian app (M1 to M4.2)
+# Meridian app (M1 to M4.3)
 
 The Meridian application: vanilla HTML, CSS and JavaScript with native ES modules. No framework, no build step,
 no dependencies, no external requests.
@@ -7,9 +7,9 @@ no dependencies, no external requests.
 - M1: Command Centre, Projects, Tasks, the application shell and the Ctrl/Cmd+K launcher.
 - M2: Calendar, Milestones, Contacts and Decisions.
 - M3: Finances (accounts and cash, append-only transactions, funding, capital, CSV import).
-- M4.1: Settings. M4.2: Company Vault (metadata only, no file storage).
+- M4.1: Settings. M4.2: Company Vault (metadata only, no file storage). M4.3: Reports, and the Command Centre finance panels.
 
-**Not built yet:** Reports (M4.3). It appears in the navigation as an honest "not built yet" page, never as a mock screen.
+Every module in the navigation is built. Everything runs on fictional development data; no backend is connected.
 
 ## M2: schema gaps and app-level rules (flagged for review)
 
@@ -72,6 +72,26 @@ funding requirement), once.
 Fictional Vault fixtures: 14 document records (two version chains, two archived), 20 links. Their checksums are the
 SHA-256 of a `fictional:` label, not of any real file.
 
+## M4.3: Reports, calculation notes (flagged for review)
+
+Reports and the Command Centre take every finance figure from one loader, `financeSnapshot()` in
+`modules/reporting.js`. It reads the same RPCs and views as the Finances module, so all three screens show identical
+figures for the same date (`tests/app/reports.test.mjs` checks this). Each report section states its scope: *for the
+period*, *as of* a date, or *current*.
+
+| # | Item | What the app does |
+|---|---|---|
+| R-1 | **Income and expenses for a period** | No approved view or RPC sums the ledger by period. `ledgerTotals()` adds up non-reversed rows by classification (operational income and expenses, capital, loans, grants, settlements, personal payments, transfers), never nets funding into income, and is tested by reconciling to `get_available_cash` |
+| R-2 | **Burn and runway** | Not calculated: no approved definition (see F-3). The report and the Command Centre say so |
+| R-3 | **Funding, capital and settlements are current** | Their views have no as-of date, so these sections show today's position, labelled as current, whatever the reporting period |
+| R-4 | **Operational history** | Only `created_at`, `completed_at` and `achieved_at` are dated. "Open at a date" uses them; other statuses (Delayed, Cancelled, project status) are current state |
+| R-5 | **Reversals** | A reversal removes a transaction from every period and as-of date, including earlier ones (register A12) |
+
+Periods are inclusive business-local dates: this month, last month, this quarter, last 30 days, financial year to
+date and last financial year (from `businesses.financial_year_start_month`), or a custom range that ends no later than today.
+CSV exports use RFC 4180 quoting and guard against formula injection. Money is written as plain 2-decimal text with a
+currency column. Every row carries a data-source column, and development files are named `meridian-DEVELOPMENT-fictional-…`.
+
 ## Run it
 
 ```bash
@@ -82,7 +102,7 @@ With XAMPP's Apache running it is also at `http://localhost/meridian/app/`. `app
 the repository root stays denied.
 
 ```bash
-node --test "tests/app/*.test.mjs"   # 61 tests: core, data adapter, projections, M2, finance (incl. SQL parity), vault
+node --test "tests/app/*.test.mjs"   # 68 tests: core, data adapter, projections, M2, finance (incl. SQL parity), vault, reports
 ```
 
 ## Data: development fixtures, no backend
@@ -135,10 +155,10 @@ Connecting the backend later means adding `adapters/supabase.js` with the same i
    projects, finance, funding, schedule, activity), and its `hidden` list is honoured.
 2. **KPI strip:**
    - shown: open tasks, due today, overdue, active projects, milestones in the next 14 days (with the late count);
-   - available cash is shown as "Not connected".
+   - available cash today, from `financeSnapshot()` (labelled fictional in development).
 3. **Needs attention:** overdue open tasks (Critical first), then late milestones (Delayed, or open and past due),
    then tasks due today, then Critical tasks with no due date. Up to 8, with a count of the rest.
-4. **Finance and funding panels** in the Command Centre still show "not connected yet": wiring them to the Finances repositories (M3.5) is not done. No estimated figures are shown.
+4. **Finance and funding panels** show available cash today, account balances, what is owed to participants, and committed, received and outstanding funding, all from `financeSnapshot()`. They never show burn or runway (R-2).
 5. **Schedule:**
    - covers the next 14 days in the business time zone;
    - lists calendar events, open task due dates and open milestone due dates;

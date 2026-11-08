@@ -32,7 +32,7 @@ export const MODULES = [
   { id: 'vault', group: 'Business', label: 'Company Vault', icon: 'vault', path: '/vault', milestone: 'M4', built: true,
     summary: 'Company documents, archive-only, behind one storage-provider interface.', tables: ['documents', 'document_links'],
     planned: ['Documents by category with versions', 'Links to projects, tasks, decisions, contacts and finance records', 'Archive-only: no client deletion'] },
-  { id: 'reports', group: 'Insights', label: 'Reports', icon: 'chart', path: '/reports', milestone: 'M4',
+  { id: 'reports', group: 'Insights', label: 'Reports', icon: 'chart', path: '/reports', milestone: 'M4', built: true,
     summary: 'Read-only reports built from the modules.', tables: [],
     planned: ['Project and task throughput', 'Funding and capital position', 'Exports'] },
   { id: 'settings', group: 'System', label: 'Settings', icon: 'settings', path: '/settings', milestone: 'M4', built: true,
