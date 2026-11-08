@@ -1,54 +1,53 @@
 # Recovery runbook: change report
 
-For independent review. Nothing was executed in either round: no target project, no drill run, no write to either
+For independent review. Nothing was executed in any round: no target project, no drill run, no write to either
 validation project, no D1, migrations unchanged, Gate 2 paused.
 
-## Revision 2 → 3 (8 Nov 2026): implementation corrections
+## Revision 3 → 4 (8 Nov 2026): final focused corrections
 
 | # | Issue | How it is addressed | Where |
 |---|---|---|---|
-| 1 | R-16 deviation record only in memory | `persist()` writes `evidence/recovery-drill.json` through a temp file, `fsync` and rename. R-16 persists the deviation (`state: recorded, not yet applied`) **before** the password API call, then persists `password_reset` (time, status, returned id, state), then `sign_in` (time, status, token issued, ids, error), each separately. The target-dirty state is also persisted before R-02 | `drill.mjs` `persist()`, R-02, R-16; runbook §5 |
-| 2 | Migration integrity | New committed manifest `tests/recovery/approved-migrations.sha256` (9 lines). **R-00** runs first, locally: exactly 9 `.sql` files, exactly the 9 listed, each sha256 equal, manifest well-formed with no duplicates; otherwise it stops with nothing written. Hashes go into `evidence.migrations`. The verified bytes are **piped** to psql, so the applied file is the hashed file | `migrations.mjs` + `migrations.test.mjs`, `drill.mjs` R-00/R-02; runbook §4 |
-| 3 | R-12 too narrow | Now compares: relation ACLs with owner and **PUBLIC** entries; column ACLs; RLS enabled **and FORCE**; view `reloptions` (`security_invoker`); `public`/`storage` schema ACLs; default privileges (global + `public`, all roles); policies with permissive and roles; every `public` function's full definition md5 plus DEFINER, config, volatility, leakproof, owner, ACL; trigger definitions; the complete bucket row. Exclusions documented: platform schemas' internals, `qa`, bucket timestamps | `reconcile.sql` `security`; runbook §7 |
-| 4 | Storage path encoding | `storagePath(bucket, name)`: each segment `encodeURIComponent`'d, `/` kept; empty, `.` and `..` segments refused. Used for the R-03 upload and every R-06 read, upload and read-back. R-06 now reads bucket and name as separate columns. Tests: spaces, NFC é, Devanagari, emoji, `# ? % & = + : @ ; , \ [ ]`, a literal `%2F`, bucket encoding, round trip, unsafe segments | `paths.mjs` + `paths.test.mjs`; `drill.mjs` R-03/R-06 |
-| 5 | R-16 identity | Passes only if the reset response id, the sign-in response `user.id` **and** the access token's `sub` all equal the selected restored user's id. All three are recorded | `drill.mjs` R-16 |
-| 6 | Platform versions auto-accepted | **R-01b** is separate from R-01a and stops (nothing written) on any GoTrue/Storage version difference, unless `tests/recovery/accepted-platform-versions.json` has an entry for exactly that pair with a reason, a reviewer and a date. The file is committed and empty. Accepted entries are copied into the evidence | `drill.mjs` R-01b; runbook §4, §10 |
+| 1 | R-01 emptiness | Six counts: public tables, `storage.objects`, `storage.buckets`, `auth.users`, **`auth.identities`**, **`supabase_migrations.schema_migrations` rows**. Any non-zero fails R-01 with nothing written. A missing history table or schema counts as 0: the count is guarded by `to_regclass`, and `query_to_xml` is volatile, so `CASE` never evaluates it for a missing table. All six go into `evidence.target_counts` | `drill.mjs` R-01 |
+| 2 | R-02 invocation | The exact arguments now live in `psql.mjs` (`migrationArgs`, `restoreArgs`, shared `run`), used by both the drill and the test. Reviewed against the PostgreSQL 17 psql docs: `-1` puts `BEGIN` before the first `-c`/`-f` and `COMMIT` after the last, and sends `ROLLBACK` instead if anything fails with `ON_ERROR_STOP`. So the stdin file (`-f -`) and the history insert (`-c`) are one transaction. The docs name two exceptions. R-00 now refuses (a) transaction control inside a file and (b) psql meta-commands (`\q` would end stdin early and commit a partial file). Statements that cannot run in a transaction make the whole call fail, which is still atomic. **Isolated test:** `psql.test.mjs` | `psql.mjs`, `psql.test.mjs`, `migrations.mjs` `transactionHazard`, runbook §4 |
+| 3 | R-12 trigger scope | Restricted to triggers on tables in `public`: 55 today. That removes 12 platform triggers in `storage` and `realtime`. Platform-table triggers that matter to the restore are compared in R-01a. Meridian creates no trigger or index on a platform table (migrations checked). SQL comment and runbook §7 now state the same scope | `reconcile.sql`, runbook §7 |
+| 4 | R-16 crash states | Each call: `not_attempted` → `outcome_unknown` written to disk **immediately before** the call → `confirmed_applied` (2xx) or `confirmed_refused` (4xx) only once the response proves it. No response, crash, timeout or 5xx stays `outcome_unknown`. The deviation itself is still durably recorded before anything is attempted. The sign-in is attempted only after a `confirmed_applied` reset | `evidence.mjs` `apiOutcome`, `drill.mjs` R-16, runbook §5 |
+| 5 | Folder flush | `writeDurable`: temp file, fsync, rename, then fsync of the folder. On Windows Node cannot open a folder for fsync. **Observed `EPERM` on this machine**: recorded as `not supported on win32 (EPERM); NTFS journals the rename` in `evidence.persistence.directory_flush`. On POSIX a failure is an error | `evidence.mjs`, runbook §7 |
+| 6 | Partial R-06 evidence | `evidence.files` is the live state, written to disk before each read, upload and read-back (`in_progress`) and after each object. On failure, `failed` (object, phase: `path_encoding` / `source_read` / `target_upload` / `read_back` / `read_back_sha256`, detail, time) is recorded and persisted before the stop. `copied` and `verified` (object, size, sha256) keep everything done up to that point. Transport errors are caught per phase; an upload with no response is marked outcome unknown | `drill.mjs` R-06, runbook §6 |
 
-Also found and fixed in this round: `ORDER BY 1` inside the fingerprint's aggregates sorted by a constant. Key order
-doesn't affect the comparison (the diff walks keys by name), but the orders are now real, so `fingerprints.json` is deterministic.
+### What was actually tested in this round
 
-Expected consequence: the target is created after the source, so a GoTrue or Storage update in between is plausible.
-P-4 compares the versions read-only before the run, so any difference is reviewed beforehand rather than stopping the drill.
-
-### Verification in this round
-
-| Check | Result |
-|---|---|
-| `node tests/recovery/migrations.test.mjs` | passes: repository matches the manifest; changed byte, missing file, extra file, 8-line manifest, duplicate line, malformed line all caught; CRLF manifest accepted |
-| `node tests/recovery/paths.test.mjs` | passes |
-| `node tests/recovery/compare.test.mjs` | passes (unchanged rules) |
-| extended R-12 `security` block on the source (read-only, MCP) | runs; 36 relation ACLs, 196 column ACLs, 30 tables all RLS-forced, 6 views, 2 schema ACLs, 7 default-ACL entries, 31 policies, 27 functions, 67 triggers, 1 bucket |
-| manifest vs git | the 9 files are unchanged since `d1b884e`; their MD5s equal those verified on `xwopffsacsctvjjwnxnw` |
-| `drill.mjs` | syntax check only |
+| Test | Where it ran | Result |
+|---|---|---|
+| `evidence.test.mjs`: durable write (create, replace, stale temp file), folder flush result, `apiOutcome` for 2xx, 4xx, 5xx, 3xx, 1xx, thrown, missing | this machine (Windows, Node 24) | **passes**; folder flush recorded as `not supported on win32 (EPERM)` |
+| `migrations.test.mjs`: previous cases plus 14 transaction-control or meta-command lines refused, 5 harmless lookalikes accepted (PL/pgSQL BEGIN/END, comments, identifiers, strings), line number reported, the 9 approved files clean | this machine | **passes** |
+| `compare.test.mjs`, `paths.test.mjs` | this machine | pass (unchanged) |
+| R-01 history count: missing table → 0, missing schema → 0, present → 9; `query_to_xml` volatility `v` | source, read-only (MCP) | as expected |
+| R-12 trigger query restricted to `public` | source, read-only | 55 triggers |
+| migrations scanned for transaction control, `\` lines, CONCURRENTLY/VACUUM, triggers or indexes on platform tables | repository | none; only 2 policies on `storage.objects` (compared in R-12) |
+| `drill.mjs` | | syntax check only |
+| **`psql.test.mjs`** | | **not run.** This machine has only the PostgreSQL client tools (`initdb` fails: no server share files), and has no Docker or WSL. It needs PostgreSQL 15+ server binaries; it creates and deletes a throwaway cluster on 127.0.0.1 and never touches Supabase. Until it runs, the R-02/R-05 atomicity rests on the psql documentation, not on a test. Runbook P-6 makes it a pre-execution requirement |
 
 ### Still not verified
 
-The end-to-end drill: psql and pg_dump against the pooler, psql reading migrations from stdin with `-f -`, Storage
-upsert behaviour on a restored row, and the target Auth calls. `persist()` and the R-16 ordering are verified by
-reading the code, not by an automated test.
+- The end-to-end drill against Supabase.
+- `psql.test.mjs` (above).
+- The R-16 and R-06 crash paths are implemented and reviewed by reading the code. Only their building blocks (`writeDurable`, `apiOutcome`) are tested automatically.
 
 ---
 
-## Revision 1 → 2 (8 Nov 2026): reviewer refinements
+## Revision 2 → 3: implementation corrections
 
-| # | Requested | Done |
+| # | Issue | Fix |
 |---|---|---|
-| 1 | A1 must compare definitions | `platform-schema.sql`: per column type, nullability, default/generation, identity, generated, collation; all constraints, indexes, triggers; R-01a before any write |
-| 2 | `auth.identities.user_id → auth.users.id` | added to `orphans.sql` (85 checks) |
-| 3 | Storage: ids, owner, size, MIME, eTag, metadata; classify API-changed fields | every column of every object; only `updated_at`, `last_accessed_at`, `version`, `metadata.lastModified` may differ, and only on re-uploaded objects |
-| 4 | Exact versus acceptable; nothing ignored | three evidence lists; results PASS_EXACT / PASS_WITH_CLASSIFIED_DIFFERENCES / INCOMPLETE / FAIL |
-| 5 | Record A2's password change | `intentional_deviations` (now flushed to disk, revision 3) |
-| 6 | Provide scripts | done |
+| 1 | R-16 record only in memory | deviation persisted (temp file, fsync, rename) before the reset; outcomes persisted separately |
+| 2 | Migration integrity | committed `approved-migrations.sha256`; R-00 requires exactly the 9 files with matching sha256 before any write; hashes in evidence; verified bytes piped to psql |
+| 3 | R-12 narrow | ACLs incl. PUBLIC, column ACLs, RLS forced, view options, schema ACLs, default privileges, policy roles, function definitions and config, trigger definitions, full bucket row |
+| 4 | Path encoding | `paths.mjs`, per-segment encoding with tests |
+| 5 | R-16 identity | reset id, response `user.id` and token `sub` must equal the selected user |
+| 6 | Platform versions | R-01b stops on any difference unless a reviewed entry exists in `accepted-platform-versions.json` |
 
-Also fixed in revision 2: money compared as text (`JSON.parse` hid the scale), full-row Auth comparison, a stricter
-definition of an index-only row, and a clean exit on Windows.
+## Revision 1 → 2: reviewer refinements
+
+A1 full definitions (`platform-schema.sql`); `auth.identities` FK check; Storage compared field by field with
+classification; exact versus platform-generated differences, nothing ignored; the A2 password change recorded;
+scripts supplied. Also: money compared as text, full-row Auth comparison, a stricter index-only rule, and a clean exit on Windows.

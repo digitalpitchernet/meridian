@@ -16,6 +16,16 @@ export function parseManifest(text) {
   });
 }
 
+// Statements that would defeat psql --single-transaction (psql docs: "If the commands themselves contain BEGIN, COMMIT,
+// or ROLLBACK, this option will not have the desired effects"), and psql meta-commands: with '-f -', '\q' ends the
+// input early, so the wrapping transaction would COMMIT a partial file. Line-based and fail-closed: a COMMIT inside a
+// procedure body would also be refused. PL/pgSQL 'BEGIN' (no semicolon) and 'END;' are block syntax and not matched.
+const HAZARD = /^[ \t]*(BEGIN[ \t]*(TRANSACTION|WORK)?[ \t]*;|START[ \t]+TRANSACTION\b|COMMIT\b|END[ \t]+(TRANSACTION|WORK)\b|ROLLBACK\b|ABORT\b|SAVEPOINT\b|RELEASE\b|PREPARE[ \t]+TRANSACTION\b|\\)/im;
+export function transactionHazard(text) {
+  const m = String(text).match(HAZARD);
+  return m ? `line ${String(text).slice(0, m.index).split('\n').length}: ${m[0].trim()}` : null;
+}
+
 export function verifyMigrations(dir, manifestText) {
   const problems = [];
   let approved = [];
@@ -31,5 +41,6 @@ export function verifyMigrations(dir, manifestText) {
     else if (m.sha256 !== a.sha256) problems.push(`${a.file} sha256 ${m.sha256} differs from approved ${a.sha256}`);
   }
   for (const m of files) if (!approved.some(a => a.file === m.file)) problems.push(`unapproved file ${m.file}`);
+  for (const m of files) { const h = transactionHazard(m.bytes.toString('utf8')); if (h) problems.push(`${m.file} contains transaction control or a psql meta-command (${h})`); }
   return { files, problems };
 }

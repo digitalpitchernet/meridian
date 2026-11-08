@@ -1,7 +1,7 @@
-# Meridian Gate 1 Recovery Drill: Runbook (revision 3, for review, not yet executed)
+# Meridian Gate 1 Recovery Drill: Runbook (revision 4, for review, not yet executed)
 
-Status: **revision 3 for independent review, 8 Nov 2026.** It covers the reviewer's six implementation corrections on
-top of revision 2. Changes are in `docs/RECOVERY-RUNBOOK-CHANGES.md`. Nothing has been run. The
+Status: **revision 4 for independent review, 8 Nov 2026** (final focused round). Changes are in
+`docs/RECOVERY-RUNBOOK-CHANGES.md`. Nothing has been run. The
 recovery target does not exist. The nine migrations, both validation projects and Gate 2 are untouched. **D1 (source
 sentinel write) is not approved.**
 
@@ -19,10 +19,13 @@ either proven exact, classified as platform-generated with a stated reason, or f
 | `tests/recovery/reconcile.sql` | fingerprint: tables, full Auth rows, every Storage object field, finance as exact text, security posture |
 | `tests/recovery/compare.mjs` (+ `.test.mjs`) | diff and classification (exact / platform_generated / platform_version / unexpected) |
 | `tests/recovery/paths.mjs` (+ `.test.mjs`) | Storage URL path encoding, per segment, separators kept |
+| `tests/recovery/psql.mjs` (+ `.test.mjs`) | the exact R-02 and R-05 psql invocations; the test runs them on a throwaway local cluster |
+| `tests/recovery/evidence.mjs` (+ `.test.mjs`) | durable evidence writes; API outcome classification for R-16 |
 | `tests/recovery/orphans.sql` | A4: 84 public foreign keys + `auth.identities.user_id → auth.users.id` |
 
-Self-tests (no network, no credentials): `node tests/recovery/compare.test.mjs`, `node tests/recovery/migrations.test.mjs`,
-`node tests/recovery/paths.test.mjs`.
+Self-tests that need no network or credentials: `compare.test.mjs`, `migrations.test.mjs`, `paths.test.mjs` and
+`evidence.test.mjs`. `psql.test.mjs` also needs local PostgreSQL 15+ **server** binaries (`initdb`, `pg_ctl`, `postgres`).
+It creates a throwaway cluster on 127.0.0.1 in the OS temp folder and deletes it afterwards. It never connects to Supabase.
 
 | | Source | Target |
 |---|---|---|
@@ -78,6 +81,7 @@ URI shape: `postgresql://postgres.<ref>:<password>@aws-<n>-ap-south-1.pooler.sup
 | P-3 | Gavin (MCP) | Target empty: 0 public tables, 0 objects, 0 users, 0 buckets; Postgres 17.x | all zero |
 | P-4 | Gavin (MCP) | `platform-schema.sql` on both: identical `tables` section (the drill repeats this as R-01a), and compare `platform_versions` (R-01b). The target is created later than the source, so Supabase may have updated GoTrue or Storage in between. If so, the difference is identified and reviewed **before** the run (§4 step 2) | identical, or reviewed and accepted |
 | P-5 | Founder | Dry-run read of the source in your own terminal: `& "C:\Program Files\PostgreSQL\17\bin\pg_dump.exe" "<SOURCE_DB_URL>" --data-only -t auth.users -f tests\recovery\.work\dryrun.sql`, then delete the file | exit 0, non-empty |
+| P-6 | Gavin or the reviewer | `node tests/recovery/psql.test.mjs` on a machine with PostgreSQL 15+ **server** binaries (throwaway local cluster; never Supabase). **Open:** the founder's machine has only the PostgreSQL client tools, so this test has **not run yet** | all assertions pass; required before execution |
 
 ---
 
@@ -109,10 +113,16 @@ deleted after the drill (§8 step 9).
 
 0. **R-00** (local, before anything else). `supabase/migrations/` must contain **exactly** the 9 files listed in the committed
    `tests/recovery/approved-migrations.sha256`, each with the listed sha256. A missing, extra, renamed or changed file, or
-   a manifest that is not exactly 9 well-formed, unique lines, stops the drill with nothing written. The 9 file names and
+   a manifest that is not exactly 9 well-formed, unique lines, stops the drill with nothing written. So does any file
+   containing transaction control (`BEGIN;`, `COMMIT`, `ROLLBACK`, `START TRANSACTION`, `SAVEPOINT`, `RELEASE`, `ABORT`,
+   `END TRANSACTION`, `PREPARE TRANSACTION`) or a psql meta-command (a line starting with `\`), because those would
+   defeat the single transaction in step 3. None of the 9 approved files contains any. The 9 file names and
    hashes go into `evidence.migrations`. The manifest was generated on 8 Nov 2026 from the files last changed in commit
    `d1b884e`; their MD5s equal the statements applied on `xwopffsacsctvjjwnxnw`.
-1. **R-01** stop unless the target has 0 public tables, 0 objects, 0 Auth users, 0 buckets.
+1. **R-01** six counts, all recorded in `evidence.target_counts`; any non-zero value stops the drill with nothing written:
+   public tables, `storage.objects`, `storage.buckets`, `auth.users`, `auth.identities`, and rows in
+   `supabase_migrations.schema_migrations`. A missing history schema or table counts as 0: the count runs only when
+   `to_regclass` finds the table (verified read-only on the source: missing table → 0, missing schema → 0, present → 9).
 2. **R-01a (A1)** before any write, `platform-schema.sql` on both projects. For `auth.users`, `auth.identities` and
    `storage.objects` it compares, per column, the type with modifiers, nullability, the default or generation
    expression, identity, generated flag and collation, plus every constraint, index and trigger definition. Any
@@ -122,9 +132,25 @@ deleted after the drill (§8 step 9).
    entry for exactly that source/target version pair with a reason, a reviewer and a date. An entry is added only after
    the difference has been identified (what changed between the versions) and explicitly reviewed. It is committed, so
    the acceptance is in git history, and it is copied into `evidence.differences.platform_version`. The file is empty today.
-3. **R-02** apply the migrations in filename order with psql, each in its own transaction with `ON_ERROR_STOP`,
-   recording each version. The **bytes verified in R-00 are piped to psql**, so a file cannot change between the check
-   and the apply. From here the evidence marks the target **dirty** (A6), and that state is written to disk first.
+3. **R-02** for each file, in filename order, one psql call (`psql.mjs`):
+   ```
+   psql <TARGET_DB_URL> -X -q -v ON_ERROR_STOP=1 --single-transaction -f - \
+        -c "insert into supabase_migrations.schema_migrations (version, name) values ('<version>', '<name>')"
+   (stdin = the file's bytes as verified in R-00)
+   ```
+   psql sends `BEGIN` before the first `-f`/`-c`, runs the file (read from stdin), then the history insert, then
+   `COMMIT`. With `ON_ERROR_STOP` set, any error in either part makes psql send `ROLLBACK` instead (PostgreSQL 17 psql
+   documentation for `-1`). So a migration and its history row commit together or not at all. The documented
+   exceptions are transaction control inside the file and statements that cannot run in a transaction block. The
+   first is refused by R-00 (as is `\q`, which would end stdin early and commit a partial file). The second makes the
+   whole call fail, which is still atomic. `psql.test.mjs` proves this on a throwaway cluster:
+   - success commits both;
+   - an error mid-file leaves neither;
+   - a failing history insert (duplicate version) rolls back the file's SQL;
+   - a syntax error leaves nothing;
+   - a `COMMIT` inside a file *would* leave partial SQL, which is why R-00 refuses it.
+
+   From R-02 the evidence marks the target **dirty** (A6); that state is written to disk first.
 4. **R-05** restore in **one transaction**:
    ```
    SET session_replication_role = replica;
@@ -132,6 +158,8 @@ deleted after the drill (§8 step 9).
    \i data.sql
    SET session_replication_role = origin;
    ```
+   Same psql mechanism as R-02 (`restoreArgs` in `psql.mjs`); `psql.test.mjs` shows that a failing dump leaves no rows
+   and undoes the TRUNCATE, and that replica mode really skipped an ordinary trigger and an FK during the load.
    Replica mode stops guard, immutability and activity triggers from re-firing on reloaded history. It also skips FK
    triggers, so integrity is re-checked in R-14. CHECK, NOT NULL and UNIQUE are still enforced. Any error rolls the
    whole restore back. `installation_settings.max_workspaces` comes back as 2, the validation value.
@@ -150,15 +178,25 @@ deleted after the drill (§8 step 9).
 - **R-16, intentional deviation.** To prove a restored user can sign in, the drill sets a **new random password on one
   restored user on the target** (the lowest user id) through the target Admin API, then signs in with the target
   publishable key. This changes that user's `encrypted_password`, `updated_at` and `last_sign_in_at`, and adds session
-  and audit rows on the target only. The sequence:
-  1. the deviation record (user, fields, reason, `state: recorded, not yet applied`) is written to
-     `evidence/recovery-drill.json` and **fsync'd** (temp file + rename) **before** the API call;
-  2. the password-reset outcome (`password_reset`: time, HTTP status, returned user id; `state`) is recorded and flushed;
-  3. the sign-in outcome (`sign_in`: time, status, token issued, `returned_user_id`, `token_sub`, `same_user`, error
-     code) is recorded and flushed.
-  R-16 passes only if the reset returned the selected id, the sign-in issued a token, and **both** the `user.id` in the
-  sign-in response and the token's `sub` equal the selected restored user's id. A crash at any point leaves the deviation
-  on disk. All fingerprints are taken **before** R-16, so the comparison is unaffected. R-15 and R-16 do not run if any
+  and audit rows on the target only. Each of the two calls has an `outcome`:
+
+  | Outcome | Meaning |
+  |---|---|
+  | `not_attempted` | not called |
+  | `outcome_unknown` | called; no conclusive answer (no response, crash, timeout or 5xx). It **may** have happened |
+  | `confirmed_applied` | 2xx: the server reports it done |
+  | `confirmed_refused` | 4xx: the server reports it rejected, so nothing changed |
+
+  Sequence, each step written durably to `evidence/recovery-drill.json`:
+  1. the deviation record (user, fields, reason; both outcomes `not_attempted`) **before** anything is attempted;
+  2. `password_reset.outcome = outcome_unknown` and `attempted_at`, **immediately before** the API call;
+  3. after the response: the proven outcome, HTTP status, returned user id (or the transport error);
+  4. only if the reset is `confirmed_applied`: steps 2–3 again for `sign_in`, plus `token_issued`, `returned_user_id`,
+     `token_sub`, `same_user`.
+
+  A crash or lost response at any point therefore leaves `outcome_unknown` on disk, never a state implying the change
+  did not happen. R-16 passes only if the reset is `confirmed_applied` with the selected id, the sign-in is
+  `confirmed_applied` with a token, and **both** the response `user.id` and the token `sub` equal the selected id. All fingerprints are taken **before** R-16, so the comparison is unaffected. R-15 and R-16 do not run if any
   earlier step failed, so a failed target stays as it was for diagnosis.
 - Nothing is written to Auth tables outside the single restore transaction and R-16. No Auth schema object is changed.
 
@@ -174,6 +212,11 @@ deleted after the drill (§8 step 9).
 - URLs: bucket and object name are percent-encoded **per segment**, keeping `/` (`paths.mjs`). Spaces, Unicode and
   reserved characters (`# ? % & = + : @ ; , \ [ ]`) cannot turn into a query, fragment or different path. Empty, `.` and
   `..` segments are refused. This applies to the R-03 upload and every R-06 read, upload and read-back.
+- Partial evidence: `evidence.files` is the live copy state, written to disk before each object's read, upload and
+  read-back (`in_progress`: object, phase), and after each object. It holds `copied` (uploads the target confirmed),
+  `verified` (object, size, sha256), `metadata_only`, and on failure `failed` (object; phase `path_encoding`,
+  `source_read`, `target_upload`, `read_back` or `read_back_sha256`; detail; time). This is persisted before the drill
+  stops. An upload with no response is recorded as `no response (upload outcome unknown)`.
 - A row is treated as index-only only if its source `metadata` is NULL **and** Storage answers 400 not-found. Today
   that is the 3 SQL-test rows. Any other read failure fails R-06.
 - **R-10** compares every column of every object, keyed by bucket/name: id, owner, owner_id, created_at, updated_at,
@@ -211,7 +254,7 @@ Result vocabulary in `evidence/recovery-drill.json`:
 | Area | Step | Compared | Pass |
 |---|---|---|---|
 | Migration files | R-00 | exactly 9 files; sha256 equal to the approved manifest | identical; hashes in evidence |
-| Target clean | R-01 | public tables, objects, users, buckets | all 0 |
+| Target clean | R-01 | public tables, storage objects, buckets, auth users, auth identities, migration history rows | all 6 are 0; recorded |
 | Platform tables | R-01a | full definitions of `auth.users`, `auth.identities`, `storage.objects` | identical |
 | Platform versions | R-01b | GoTrue and Storage migration levels | identical, or a reviewed entry in `accepted-platform-versions.json` |
 | Schema | R-02, R-07 | 9 verified files applied; version list | identical |
@@ -241,12 +284,24 @@ Result vocabulary in `evidence/recovery-drill.json`:
 | `default_acl` | default privileges for future objects: global and `public`, every role (7 entries, including migration 8's global PUBLIC EXECUTE revoke) |
 | `policies` | public and storage: permissive/restrictive, roles, command, USING, WITH CHECK (31) |
 | `functions` | every `public` function: md5 of `pg_get_functiondef` (body, language, SECURITY DEFINER, `SET search_path`), plus security_definer, config, volatility, leakproof, owner, ACL (27) |
-| `triggers` | every non-internal trigger outside `qa`: enabled state + md5 of its definition (67) |
+| `triggers` | every non-internal trigger on a `public` table: enabled state + md5 of its definition (55) |
 | `buckets` | the complete `storage.buckets` row (public, size limit, MIME types, type, versioning, lifecycle, owner, …) |
 
-Deliberate exclusions, which are not compared: functions, grants and ACLs inside `auth`, `storage`, `extensions` and other
-Supabase-owned schemas (platform-managed; the three tables the restore writes are covered by R-01a); the `qa` test
-schema (never restored); bucket `created_at` and `updated_at` (set when migration 6 runs on each project).
+Deliberate exclusions, which are not compared:
+- functions, **triggers**, grants and ACLs inside `auth`, `storage`, `realtime`, `extensions` and other Supabase-owned
+  schemas. They are platform-managed: 12 platform triggers exist today, in `storage` and `realtime`. The three tables
+  the restore writes (`auth.users`, `auth.identities`, `storage.objects`) have their triggers, indexes, constraints and
+  columns compared in R-01a. Meridian creates no trigger or index on any platform table (checked in the migrations).
+  Its two policies on `storage.objects` are compared under `policies`;
+- the `qa` test schema (never restored);
+- bucket `created_at` and `updated_at` (set when migration 6 runs on each project).
+
+Evidence durability: every write of `evidence/recovery-drill.json` goes to a temp file, which is flushed to disk with
+fsync, renamed over the old file, and then the folder itself is flushed. The result is recorded in
+`evidence.persistence.directory_flush`. **Platform limitation:** on Windows, Node cannot open a folder for fsync
+(`EPERM`, observed on this machine). NTFS journals the rename itself, so the file is still protected, but the folder
+flush is recorded as not supported rather than done. On Linux and macOS the folder flush runs, and a failure there
+stops the drill.
 
 Gavin's read-only follow-up on the target via MCP: `orphans.sql` again; the security advisor (expected 0008 ×1 INFO,
 0029 ×8 WARN, leaked-password ×1 WARN, no 0011 because `qa` is not restored); `qa` absent.
@@ -288,6 +343,10 @@ or write to either validation project.
 | A5 | `--allow-source-sentinel`; without it R-03 is SKIPPED and the result cannot be PASS |
 | A6 | `target_state` in the evidence and output: `dirty: recreate the target before any re-run` from R-02 onwards |
 
+Revision 4 corrections: six-count R-01; the R-02 invocation shared with an isolated psql test, and R-00 refusing
+transaction control and meta-commands; R-12 triggers limited to `public`; R-16 `attempted`/`outcome_unknown` states;
+folder flush after rename; partial R-06 evidence.
+
 Revision 3 corrections: R-00 migration manifest; R-01b reviewed-only version differences; R-12 extended; per-segment
 path encoding; R-16 deviation flushed to disk before the change, outcomes recorded separately, signed-in identity
 verified. See the change report.
@@ -312,9 +371,9 @@ record; recreate the target". The target is never repaired by hand.
 | R-03 | target migrated | no (upload failed) | check the source key; recreate the target; re-run |
 | R-04 | target migrated; sentinel present if D1 | sentinel only | fix the connection or version; recreate the target |
 | R-05 | restore rolled back | sentinel only | record the psql error; recreate the target |
-| R-06 | restored, some files copied | sentinel only | record the object and status; recreate the target |
+| R-06 | restored, some files copied | sentinel only | `evidence.files` already holds the copied and verified objects and the failing object and phase; recreate the target |
 | R-07…R-14 | loaded but different | sentinel only | keep the target untouched (R-15/R-16 do not run); Gavin diffs the fingerprints and classifies the cause (drill, product, platform) |
-| R-15 / R-16 | loaded; R-16 may have reset one password | sentinel only | record; the deviation is already in the evidence |
+| R-15 / R-16 | loaded; R-16 may have reset one password | sentinel only | the deviation and each call's outcome are already on disk; `outcome_unknown` means treat the password as possibly changed |
 
 The source is never written except the sentinel (D1). A failed drill never needs a source rollback. To abort at any
 time, press Ctrl+C; the target is disposable; then delete `tests/recovery/.work`.

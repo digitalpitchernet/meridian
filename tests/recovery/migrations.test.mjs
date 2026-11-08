@@ -5,7 +5,7 @@ import { readFileSync, mkdtempSync, cpSync, writeFileSync, rmSync, appendFileSyn
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { verifyMigrations } from './migrations.mjs';
+import { verifyMigrations, transactionHazard } from './migrations.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const real = join(here, '..', '..', 'supabase', 'migrations');
@@ -33,5 +33,24 @@ assert.ok(verifyMigrations(real, [...lines, lines[0]].join('\n')).problems.some(
 assert.ok(verifyMigrations(real, `${lines.join('\n')}\nnot a manifest line`).problems.some(p => /bad manifest line/.test(p)));
 // 3. CRLF manifest is read the same as LF
 assert.deepEqual(verifyMigrations(real, lines.join('\r\n')).problems, []);
+
+// 4. transaction control and psql meta-commands are refused; PL/pgSQL block syntax and comments are not
+for (const bad of ['COMMIT;', 'commit;', '  ROLLBACK;', 'BEGIN;', 'begin transaction;', 'START TRANSACTION;', 'END TRANSACTION;',
+  'SAVEPOINT a;', 'RELEASE a;', 'ABORT;', 'PREPARE TRANSACTION \'x\';', '\\q', '\\i other.sql', '\\c otherdb']) {
+  assert.ok(transactionHazard(`create table t (id int);\n${bad}\nselect 1;`), bad);
+}
+for (const ok of ['CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$\nBEGIN\n  PERFORM 1;\nEND;\n$$;', '-- COMMIT; in a comment',
+  'select 1; -- then commit later', 'create table commits (id int);', "insert into t values ('COMMIT');"]) {
+  assert.equal(transactionHazard(ok), null, ok);
+}
+assert.equal(transactionHazard('a;\nb;\nCOMMIT;'), 'line 3: COMMIT');
+{ // a file with a hazard is refused by verifyMigrations even if the manifest were regenerated to match it
+  const d = scratch();
+  try { appendFileSync(join(d, first), '\nCOMMIT;\n'); const r = verifyMigrations(d, manifest);
+    assert.ok(r.problems.some(p => /transaction control or a psql meta-command \(line \d+: COMMIT\)/.test(p)), JSON.stringify(r.problems)); }
+  finally { rmSync(d, { recursive: true, force: true }); }
+}
+// 5. none of the 9 approved migrations contains a hazard
+for (const f of verifyMigrations(real, manifest).files) assert.equal(transactionHazard(f.bytes.toString('utf8')), null, f.file);
 
 console.log('migrations.mjs: all assertions passed');

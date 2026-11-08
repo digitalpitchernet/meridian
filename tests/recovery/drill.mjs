@@ -13,7 +13,7 @@
 // R-14 referential integrity · R-15 GoTrue lists the restored users · R-16 one restored user signs in
 // (intentional deviation, persisted to disk before it is made).
 // The dump holds password hashes: it stays in tests/recovery/.work (git-ignored); delete it after.
-import { readFileSync, mkdirSync, statSync, openSync, writeSync, fsyncSync, closeSync, renameSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -21,6 +21,8 @@ import { dirname, join } from 'node:path';
 import { diff, classify, area } from './compare.mjs';
 import { storagePath } from './paths.mjs';
 import { verifyMigrations } from './migrations.mjs';
+import { run, migrationArgs, restoreArgs } from './psql.mjs';
+import { writeDurable, apiOutcome } from './evidence.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..', '..');
@@ -42,20 +44,19 @@ const US = '\u001f'; // psql field separator: object names may contain '|'
 const STOP = Symbol('stop');
 process.on('uncaughtException', e => { if (e !== STOP) { console.error(e); process.exitCode = 1; } });
 
-// ---- evidence, persisted with fsync (temp file + rename) whenever it must survive a crash ----
+// ---- evidence, written durably (temp file, fsync, rename, directory flush where supported: evidence.mjs) ----
 const evidenceFile = join(repo, 'evidence', 'recovery-drill.json');
 const evidence = {
   suite: 'recovery-drill', ran_at: new Date().toISOString(), source: env.SUPABASE_URL, target: env.TARGET_SUPABASE_URL,
-  source_sentinel_allowed: ALLOW_SENTINEL, result: 'RUNNING', target_state: 'empty', steps: [], migrations: null,
-  dump: null, sentinel: null, files: null, platform_versions: null,
+  source_sentinel_allowed: ALLOW_SENTINEL, result: 'RUNNING', target_state: 'empty', steps: [], target_counts: null,
+  migrations: null, dump: null, sentinel: null, files: null, platform_versions: null,
   differences: { platform_generated: [], platform_version: [], unexpected: [] },
   fingerprints_taken: 'after R-06, before R-15/R-16', intentional_deviations: [],
+  persistence: { method: 'temp file, fsync, rename, then directory fsync', directory_flush: null },
 };
 function persist() {
-  mkdirSync(dirname(evidenceFile), { recursive: true });
-  const tmp = `${evidenceFile}.tmp`, fd = openSync(tmp, 'w');
-  writeSync(fd, JSON.stringify(evidence, null, 2) + '\n'); fsyncSync(fd); closeSync(fd);
-  renameSync(tmp, evidenceFile);
+  evidence.persisted_at = new Date().toISOString();
+  evidence.persistence.directory_flush = writeDurable(evidenceFile, JSON.stringify(evidence, null, 2) + '\n');
 }
 const steps = evidence.steps;
 let failed = false;
@@ -81,7 +82,7 @@ function finish() {
   throw STOP;
 }
 
-const psql = (url, args, input) => execFileSync(exe('psql'), [url, '-X', '-q', '-v', 'ON_ERROR_STOP=1', ...args], { input, encoding: 'utf8', maxBuffer: 1 << 28 });
+const psql = (url, args, input) => run(exe('psql'), url, args, input); // same invocation psql.test.mjs exercises
 const q = (url, sql) => psql(url, ['-At', '-c', sql]).trim();
 const rows = (url, sql) => psql(url, ['-At', '-F', US], sql).trim().split('\n').filter(Boolean).map(l => l.split(US));
 const json = (url, file) => JSON.parse(psql(url, ['-At'], readFileSync(join(here, file), 'utf8')).trim());
@@ -94,8 +95,17 @@ evidence.migrations = { manifest: 'tests/recovery/approved-migrations.sha256', f
 step('R-00 exactly the 9 approved migration files, sha256 equal to the approved manifest', migProblems.length === 0, migProblems.length ? migProblems : `${migs.length} files verified`);
 
 // ---- R-01 target is clean ----
-const tgt = q(env.TARGET_DB_URL, "select (select count(*) from pg_tables where schemaname = 'public') || ',' || (select count(*) from storage.objects) || ',' || (select count(*) from auth.users) || ',' || (select count(*) from storage.buckets)");
-step('R-01 target project is empty', tgt === '0,0,0,0', `public tables, storage objects, auth users, buckets = ${tgt}`);
+// The history table may not exist yet: query_to_xml is volatile, so CASE only evaluates it when to_regclass finds it.
+evidence.target_counts = JSON.parse(q(env.TARGET_DB_URL, `select json_build_object(
+  'public_tables', (select count(*) from pg_tables where schemaname = 'public'),
+  'storage_objects', (select count(*) from storage.objects),
+  'storage_buckets', (select count(*) from storage.buckets),
+  'auth_users', (select count(*) from auth.users),
+  'auth_identities', (select count(*) from auth.identities),
+  'migration_history_rows', CASE WHEN to_regclass('supabase_migrations.schema_migrations') IS NULL THEN 0
+    ELSE (xpath('/row/n/text()', query_to_xml('select count(*) as n from supabase_migrations.schema_migrations', false, true, '')))[1]::text::bigint END)`));
+step('R-01 target project is empty (6 counts)', Object.keys(evidence.target_counts).length === 6 && Object.values(evidence.target_counts).every(n => Number(n) === 0),
+  evidence.target_counts);
 
 // ---- R-01a (A1) platform table definitions identical; platform version difference only if reviewed ----
 const ps = json(env.SOURCE_DB_URL, 'platform-schema.sql'), pt = json(env.TARGET_DB_URL, 'platform-schema.sql');
@@ -121,9 +131,9 @@ psql(env.TARGET_DB_URL, ['-c', 'create schema if not exists supabase_migrations;
 for (const m of migs) {
   const [version, ...rest] = m.file.replace(/\.sql$/, '').split('_');
   try {
-    // the bytes hashed in R-00 are piped in, so the file cannot change between the check and the apply
-    psql(env.TARGET_DB_URL, ['--single-transaction', '-f', '-', '-c',
-      `insert into supabase_migrations.schema_migrations (version, name) values ('${version}', '${rest.join('_')}')`], m.bytes);
+    // the bytes hashed in R-00 are piped in, so the file cannot change between the check and the apply;
+    // file and history row are one transaction (psql.mjs; proven by psql.test.mjs)
+    psql(env.TARGET_DB_URL, migrationArgs(version, rest.join('_')), m.bytes);
   } catch (e) { step('R-02 migrations applied from the repository', false, `${m.file}: ${String(e.stderr || e.message).slice(0, 500)}`); }
 }
 step('R-02 migrations applied from the repository', true, `${migs.length} files, bytes as verified in R-00`);
@@ -151,42 +161,58 @@ step('R-04 data backup taken with pg_dump', dump.length > 0, `${evidence.dump.by
 // ---- R-05 restore: one transaction; replica mode so guard and activity triggers do not re-fire on history ----
 const restoreStart = Date.now();
 try {
-  psql(env.TARGET_DB_URL, ['--single-transaction', '-c', 'SET session_replication_role = replica', '-c', 'TRUNCATE public.installation_settings', '-f', dumpFile, '-c', 'SET session_replication_role = origin']);
+  psql(env.TARGET_DB_URL, restoreArgs(dumpFile));
 } catch (e) { step('R-05 backup restored into the target', false, `rolled back: ${String(e.stderr || e.message).slice(0, 500)}`); }
 step('R-05 backup restored into the target', true, `${Math.round((Date.now() - restoreStart) / 1000)} s, one transaction`);
 
 // ---- R-06 stored bytes: source -> target, same path (segments encoded), same mimetype and Cache-Control ----
 const objs = rows(env.SOURCE_DB_URL, "select bucket_id, name, coalesce(metadata->>'mimetype', ''), coalesce(metadata->>'cacheControl', ''), (metadata is null)::text from storage.objects order by bucket_id, name");
-const copy = { objects: objs.length, copied: [], verified: 0, metadata_only: [] };
+// evidence.files is the live copy state, persisted after every object and before any stop
+const copy = evidence.files = { objects: objs.length, copied: [], verified: [], metadata_only: [], in_progress: null, failed: null };
+const r06fail = (key, phase, detail) => {
+  copy.failed = { object: key, phase, detail, at: new Date().toISOString() }; copy.in_progress = null;
+  step('R-06 stored files copied and sha256-verified', false, `${key}: ${phase} ${detail}`); // step() -> finish() persists
+};
 for (const [bucket, name, mime, cc, noMeta] of objs) {
-  const key = `${bucket}/${name}`, path = storagePath(bucket, name);
-  const src = await fetch(`${env.SUPABASE_URL}/storage/v1/object/${path}`, { headers: auth(env.SUPABASE_SERVICE_ROLE_KEY) });
+  const key = `${bucket}/${name}`;
+  let path;
+  try { path = storagePath(bucket, name); } catch (e) { r06fail(key, 'path_encoding', e.message); }
+  copy.in_progress = { object: key, phase: 'source_read' }; persist();
+  let src; try { src = await fetch(`${env.SUPABASE_URL}/storage/v1/object/${path}`, { headers: auth(env.SUPABASE_SERVICE_ROLE_KEY) }); }
+  catch (e) { r06fail(key, 'source_read', `no response: ${e.message}`); }
   if (!src.ok) {
     const body = await src.text();
     // index-only rows (inserted by the SQL tests, metadata NULL, no bytes) stay index-only, as in the source
-    if (src.status === 400 && /not_found|NoSuchKey/.test(body) && noMeta === 'true') { copy.metadata_only.push(key); continue; }
-    step('R-06 stored files copied and sha256-verified', false, `${key}: source read ${src.status} ${body.slice(0, 200)}`);
+    if (src.status === 400 && /not_found|NoSuchKey/.test(body) && noMeta === 'true') { copy.metadata_only.push(key); copy.in_progress = null; persist(); continue; }
+    r06fail(key, 'source_read', `${src.status} ${body.slice(0, 200)}`);
   }
-  const bytes = new Uint8Array(await src.arrayBuffer());
-  const up = await fetch(`${env.TARGET_SUPABASE_URL}/storage/v1/object/${path}`, { method: 'POST',
-    headers: { ...auth(env.TARGET_SERVICE_ROLE_KEY), 'Content-Type': mime || 'application/octet-stream', ...(cc ? { 'Cache-Control': cc } : {}), 'x-upsert': 'true' }, body: bytes });
-  if (!up.ok) step('R-06 stored files copied and sha256-verified', false, `${key}: target upload ${up.status} ${(await up.text()).slice(0, 200)}`);
+  const bytes = new Uint8Array(await src.arrayBuffer()), want = sha(bytes);
+  copy.in_progress = { object: key, phase: 'target_upload', bytes: bytes.length, sha256: want }; persist();
+  let up; try { up = await fetch(`${env.TARGET_SUPABASE_URL}/storage/v1/object/${path}`, { method: 'POST',
+    headers: { ...auth(env.TARGET_SERVICE_ROLE_KEY), 'Content-Type': mime || 'application/octet-stream', ...(cc ? { 'Cache-Control': cc } : {}), 'x-upsert': 'true' }, body: bytes }); }
+  catch (e) { r06fail(key, 'target_upload', `no response (upload outcome unknown): ${e.message}`); }
+  if (!up.ok) r06fail(key, 'target_upload', `${up.status} ${(await up.text()).slice(0, 200)}`);
   copy.copied.push(key);
-  const back = new Uint8Array(await (await fetch(`${env.TARGET_SUPABASE_URL}/storage/v1/object/${path}`, { headers: auth(env.TARGET_SERVICE_ROLE_KEY) })).arrayBuffer());
-  if (sha(back) === sha(bytes)) copy.verified++;
+  copy.in_progress = { object: key, phase: 'read_back', bytes: bytes.length, sha256: want }; persist();
+  let back; try { back = await fetch(`${env.TARGET_SUPABASE_URL}/storage/v1/object/${path}`, { headers: auth(env.TARGET_SERVICE_ROLE_KEY) }); }
+  catch (e) { r06fail(key, 'read_back', `no response: ${e.message}`); }
+  if (!back.ok) r06fail(key, 'read_back', `${back.status} ${(await back.text()).slice(0, 200)}`);
+  const got = sha(new Uint8Array(await back.arrayBuffer()));
+  if (got !== want) r06fail(key, 'read_back_sha256', `target ${got} != source ${want}`);
+  copy.verified.push({ object: key, bytes: bytes.length, sha256: want });
+  copy.in_progress = null; persist();
 }
-evidence.files = copy;
 const sentinelCopied = sentinelKey && copy.copied.includes(`company-vault/${sentinelKey}`);
 if (copy.copied.length === 0) {
   record('R-06 stored files copied and sha256-verified', 'NOT_PROVEN', `no byte-bearing object in the source (${copy.metadata_only.length} index-only rows); the byte copy was not exercised`);
 } else {
-  check('R-06 stored files copied and sha256-verified', copy.verified === copy.copied.length && (!ALLOW_SENTINEL || sentinelCopied),
-    `${copy.copied.length} copied, ${copy.verified} verified, ${copy.metadata_only.length} index-only`);
+  check('R-06 stored files copied and sha256-verified', copy.verified.length === copy.copied.length && (!ALLOW_SENTINEL || sentinelCopied),
+    `${copy.copied.length} copied, ${copy.verified.length} verified, ${copy.metadata_only.length} index-only`);
 }
 
 // ---- R-07..R-13 fingerprints, every difference classified (compare.mjs) ----
 const a = json(env.SOURCE_DB_URL, 'reconcile.sql'), b = json(env.TARGET_DB_URL, 'reconcile.sql');
-{ const fd = openSync(join(work, 'fingerprints.json'), 'w'); writeSync(fd, JSON.stringify({ source: a, target: b }, null, 2)); closeSync(fd); }
+writeFileSync(join(work, 'fingerprints.json'), JSON.stringify({ source: a, target: b }, null, 2)); // diagnosis aid, not evidence
 const classified = classify(diff(a, b), new Set(copy.copied));
 for (const d of classified) evidence.differences[d.class].push(d);
 const bad = k => classified.filter(d => d.class === 'unexpected' && k.includes(area(d)));
@@ -219,32 +245,46 @@ check('R-15 GoTrue on the target lists the restored users, all confirmed', lr.ok
   `${lr.status}; ${tu.length} users; ids ${tIds === srcIds ? 'identical' : 'DIFFER'}`);
 if (failed) finish();
 
-// ---- R-16 (A2) one restored user signs in: INTENTIONAL DEVIATION, flushed to disk before it is made ----
+// ---- R-16 (A2) one restored user signs in: INTENTIONAL DEVIATION ----
+// Each call's outcome is written to disk as 'outcome_unknown' BEFORE the call and replaced only by what the response
+// proves (evidence.mjs apiOutcome). A crash or lost response therefore leaves 'outcome_unknown', never 'not applied'.
 const probe = tu.slice().sort((x, y) => x.id.localeCompare(y.id))[0];
 const deviation = {
-  step: 'R-16', target_only: true, user_id: probe.id, email: probe.email, state: 'recorded, not yet applied', recorded_at: new Date().toISOString(),
+  step: 'R-16', target_only: true, user_id: probe.id, email: probe.email, recorded_at: new Date().toISOString(),
   change: 'new random password set through the target Auth Admin API, then one password sign-in',
   fields_changed: ['auth.users.encrypted_password', 'auth.users.updated_at', 'auth.users.last_sign_in_at', 'auth.identities.last_sign_in_at / updated_at (if GoTrue updates them)', 'new rows in auth.sessions, auth.refresh_tokens, auth.mfa_amr_claims', 'auth.audit_log_entries'],
   why: 'proves a restored user is usable by GoTrue; the restored password hash cannot be tested because test passwords are random and never stored',
   effect_on_comparison: 'none: fingerprints were taken before this step; the target no longer matches the source in these fields afterwards',
-  password_reset: null, sign_in: null,
+  outcome_values: 'not_attempted | outcome_unknown (attempted, no conclusive response) | confirmed_applied (2xx) | confirmed_refused (4xx)',
+  password_reset: { outcome: 'not_attempted' }, sign_in: { outcome: 'not_attempted' },
 };
 evidence.intentional_deviations.push(deviation);
-persist(); // on disk (fsync) before the target is changed
+persist(); // 1. the deviation is on disk before anything is attempted
 const pw = randomBytes(24).toString('base64url');
-const pr = await fetch(`${env.TARGET_SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(probe.id)}`, { method: 'PUT', headers: { ...auth(env.TARGET_SERVICE_ROLE_KEY), 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
-const prBody = await pr.json().catch(() => ({}));
-deviation.password_reset = { at: new Date().toISOString(), status: pr.status, returned_user_id: prBody.id ?? null };
-deviation.state = pr.ok ? 'applied' : 'attempted; API refused';
+async function attempt(slot, call) { // 2. 'attempted' on disk immediately before the call; 3. the proven outcome after it
+  deviation[slot] = { outcome: 'outcome_unknown', attempted_at: new Date().toISOString() }; persist();
+  let res = null, body = {}, error = null;
+  try { res = await call(); body = await res.json().catch(() => ({})); } catch (e) { error = e.message; }
+  Object.assign(deviation[slot], { outcome: apiOutcome({ threw: !!error, status: res?.status ?? null }), status: res?.status ?? null,
+    responded_at: new Date().toISOString(), ...(error ? { transport_error: error } : {}) });
+  return { res, body };
+}
+const reset = await attempt('password_reset', () => fetch(`${env.TARGET_SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(probe.id)}`,
+  { method: 'PUT', headers: { ...auth(env.TARGET_SERVICE_ROLE_KEY), 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) }));
+deviation.password_reset.returned_user_id = reset.body.id ?? null;
 persist();
-const si = await fetch(`${env.TARGET_SUPABASE_URL}/auth/v1/token?grant_type=password`, { method: 'POST', headers: { apikey: env.TARGET_SUPABASE_ANON_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: probe.email, password: pw }) });
-const siBody = await si.json().catch(() => ({}));
-const tokenSub = siBody.access_token ? jwtSub(siBody.access_token) : null;
-deviation.sign_in = { at: new Date().toISOString(), status: si.status, token_issued: !!siBody.access_token,
-  returned_user_id: siBody.user?.id ?? null, token_sub: tokenSub, same_user: siBody.user?.id === probe.id && tokenSub === probe.id,
-  error: si.ok ? null : (siBody.error_code || siBody.msg || siBody.error || null) };
-persist();
+if (deviation.password_reset.outcome === 'confirmed_applied') {
+  const si = await attempt('sign_in', () => fetch(`${env.TARGET_SUPABASE_URL}/auth/v1/token?grant_type=password`,
+    { method: 'POST', headers: { apikey: env.TARGET_SUPABASE_ANON_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: probe.email, password: pw }) }));
+  const tokenSub = si.body.access_token ? jwtSub(si.body.access_token) : null;
+  Object.assign(deviation.sign_in, { token_issued: !!si.body.access_token, returned_user_id: si.body.user?.id ?? null, token_sub: tokenSub,
+    same_user: si.body.user?.id === probe.id && tokenSub === probe.id,
+    error: si.res?.ok ? null : (si.body.error_code || si.body.msg || si.body.error || null) });
+  persist();
+}
+const s = deviation.sign_in;
 check('R-16 the selected restored user signs in on the target as itself (password reset recorded as intentional deviation)',
-  pr.ok && prBody.id === probe.id && si.ok && deviation.sign_in.token_issued && deviation.sign_in.same_user,
-  `${probe.email}: password set ${pr.status}, sign-in ${si.status}, user id ${deviation.sign_in.same_user ? 'matches' : 'DOES NOT MATCH'} (response and token sub)`);
+  deviation.password_reset.outcome === 'confirmed_applied' && deviation.password_reset.returned_user_id === probe.id
+    && s.outcome === 'confirmed_applied' && s.token_issued && s.same_user,
+  `${probe.email}: password reset ${deviation.password_reset.outcome} (${deviation.password_reset.status}), sign-in ${s.outcome} (${s.status ?? '-'}), user id ${s.same_user ? 'matches (response and token sub)' : 'NOT CONFIRMED'}`);
 finish();
