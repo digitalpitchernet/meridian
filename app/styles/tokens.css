@@ -1,0 +1,93 @@
+/* Meridian design tokens. Dark is the default; light and system follow profiles.theme.
+   --accent comes from businesses.accent_color (founder-configurable) and is set at runtime.
+   Semantic colours are deliberately independent of the accent. */
+:root {
+  --accent: #3B82F6;
+  --accent-contrast: #ffffff;
+
+  --font-sans: "Inter", "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", "SF Mono", ui-monospace, Consolas, monospace;
+
+  --text-2xs: 11px; --text-xs: 12px; --text-sm: 13px; --text-md: 14px; --text-lg: 16px; --text-xl: 20px; --text-2xl: 26px;
+  --lh-tight: 1.25; --lh: 1.45;
+
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+  --radius-sm: 4px; --radius: 6px; --radius-lg: 8px;
+
+  --sidebar-w: 232px; --header-h: 48px; --panel-w: 400px; --content-max: 1240px;
+
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --dur-fast: 90ms; --dur: 160ms;
+}
+
+/* ---- dark (default) ---- */
+:root, [data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d0e11;
+  --bg-sunken: #0a0b0d;
+  --surface: #131418;
+  --surface-2: #181a1f;
+  --surface-hover: #1d1f25;
+  --surface-active: #23252c;
+  --border: rgba(255, 255, 255, .075);
+  --border-strong: rgba(255, 255, 255, .13);
+  --text: #e7e8eb;
+  --text-2: #a8abb3;
+  --text-3: #6f737c;
+  --text-on-accent: #ffffff;
+  --focus: color-mix(in srgb, var(--accent) 70%, white);
+  --overlay: rgba(4, 5, 7, .62);
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .06);
+
+  --ok: #3fb68b;   --ok-soft: rgba(63, 182, 139, .14);
+  --warn: #d9a441; --warn-soft: rgba(217, 164, 65, .14);
+  --bad: #e5604f;  --bad-soft: rgba(229, 96, 79, .14);
+  --info: #6aa7e8; --info-soft: rgba(106, 167, 232, .14);
+  --idle: #8a8e97; --idle-soft: rgba(138, 142, 151, .14);
+  --dev: #c58af0;  --dev-soft: rgba(197, 138, 240, .13);
+}
+
+/* ---- light ---- */
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #fbfbfc;
+  --bg-sunken: #f3f4f6;
+  --surface: #ffffff;
+  --surface-2: #f7f7f9;
+  --surface-hover: #f1f2f4;
+  --surface-active: #e9eaed;
+  --border: rgba(16, 18, 24, .085);
+  --border-strong: rgba(16, 18, 24, .15);
+  --text: #16181d;
+  --text-2: #4e535c;
+  --text-3: #80858e;
+  --focus: color-mix(in srgb, var(--accent) 80%, black);
+  --overlay: rgba(20, 22, 28, .32);
+  --shadow-pop: 0 12px 32px rgba(20, 22, 28, .14), 0 0 0 1px rgba(16, 18, 24, .08);
+
+  --ok: #1f8a63;   --ok-soft: rgba(31, 138, 99, .1);
+  --warn: #a8700c; --warn-soft: rgba(168, 112, 12, .1);
+  --bad: #c8412f;  --bad-soft: rgba(200, 65, 47, .09);
+  --info: #2f6db3; --info-soft: rgba(47, 109, 179, .09);
+  --idle: #6b7079; --idle-soft: rgba(107, 112, 121, .1);
+  --dev: #8a3fc0;  --dev-soft: rgba(138, 63, 192, .09);
+}
+
+/* ---- system: follow the OS when the profile says 'system' ---- */
+@media (prefers-color-scheme: light) {
+  [data-theme="system"] {
+    color-scheme: light;
+    --bg: #fbfbfc; --bg-sunken: #f3f4f6; --surface: #ffffff; --surface-2: #f7f7f9; --surface-hover: #f1f2f4; --surface-active: #e9eaed;
+    --border: rgba(16, 18, 24, .085); --border-strong: rgba(16, 18, 24, .15);
+    --text: #16181d; --text-2: #4e535c; --text-3: #80858e;
+    --focus: color-mix(in srgb, var(--accent) 80%, black); --overlay: rgba(20, 22, 28, .32);
+    --shadow-pop: 0 12px 32px rgba(20, 22, 28, .14), 0 0 0 1px rgba(16, 18, 24, .08);
+    --ok: #1f8a63; --ok-soft: rgba(31, 138, 99, .1); --warn: #a8700c; --warn-soft: rgba(168, 112, 12, .1);
+    --bad: #c8412f; --bad-soft: rgba(200, 65, 47, .09); --info: #2f6db3; --info-soft: rgba(47, 109, 179, .09);
+    --idle: #6b7079; --idle-soft: rgba(107, 112, 121, .1); --dev: #8a3fc0; --dev-soft: rgba(138, 63, 192, .09);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur: 0ms; }
+}
