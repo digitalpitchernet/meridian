@@ -81,7 +81,7 @@ URI shape: `postgresql://postgres.<ref>:<password>@aws-<n>-ap-south-1.pooler.sup
 | P-3 | Gavin (MCP) | Target empty: 0 public tables, 0 objects, 0 users, 0 buckets; Postgres 17.x | all zero |
 | P-4 | Gavin (MCP) | `platform-schema.sql` on both: identical `tables` section (the drill repeats this as R-01a), and compare `platform_versions` (R-01b). The target is created later than the source, so Supabase may have updated GoTrue or Storage in between. If so, the difference is identified and reviewed **before** the run (§4 step 2) | identical, or reviewed and accepted |
 | P-5 | Founder | Dry-run read of the source in your own terminal: `& "C:\Program Files\PostgreSQL\17\bin\pg_dump.exe" "<SOURCE_DB_URL>" --data-only -t auth.users -f tests\recovery\.work\dryrun.sql`, then delete the file | exit 0, non-empty |
-| P-6 | Gavin or the reviewer | `node tests/recovery/psql.test.mjs` on a machine with PostgreSQL 15+ **server** binaries (throwaway local cluster; never Supabase). **Open:** the founder's machine has only the PostgreSQL client tools, so this test has **not run yet** | all assertions pass; required before execution |
+| P-6 | Gavin or the reviewer | `node tests/recovery/psql.test.mjs` on a machine with PostgreSQL 15+ **server** binaries (throwaway local cluster; never Supabase). **Status: OPEN — UNVERIFIED. Execution is blocked until the full test passes.** No suitable environment exists: the founder's machine has the PostgreSQL 17.11 client tools only (no `share/postgres.bki`), no WSL distribution, no Docker or Podman. Downloading server binaries was declined (8 Nov 2026). See "P-6 evidence" in the change report | all assertions pass; required before execution |
 
 ---
 

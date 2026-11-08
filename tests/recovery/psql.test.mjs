@@ -6,7 +6,7 @@
 // restore is all-or-nothing and really runs in replica mode.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
@@ -21,9 +21,15 @@ const sh = (n, args) => execFileSync(exe(n), args, { encoding: 'utf8', stdio: ['
 const val = sql => run(exe('psql'), url, ['-At', '-c', sql]).trim();
 const fails = (args, input) => { try { run(exe('psql'), url, args, input); return false; } catch { return true; } };
 
-sh('initdb', ['-D', data, '-U', 'postgres', '-A', 'trust', '-E', 'UTF8', '--no-sync']);
-sh('pg_ctl', ['-D', data, '-l', join(dir, 'log.txt'), '-o', `-p ${port} -c listen_addresses=127.0.0.1`, '-w', 'start']);
+// Cleanup runs on every path, including initdb or pg_ctl start failing: the temp folder is always removed, and once a
+// start has been attempted the server is always stopped (pg_ctl -w can fail after the postmaster has launched).
+let startAttempted = false;
+const cleanup = { server: 'never started', dir_removed: false };
 try {
+  console.log(`binaries: ${sh('postgres', ['--version']).trim()} | ${sh('initdb', ['--version']).trim()} | ${sh('psql', ['--version']).trim()}`);
+  sh('initdb', ['-D', data, '-U', 'postgres', '-A', 'trust', '-E', 'UTF8', '--no-sync']);
+  startAttempted = true;
+  sh('pg_ctl', ['-D', data, '-l', join(dir, 'log.txt'), '-o', `-p ${port} -c listen_addresses=127.0.0.1`, '-w', 'start']);
   const version = val('show server_version');
   assert.ok(Number(version.split('.')[0]) >= 15, `needs PostgreSQL 15+, got ${version}`);
   run(exe('psql'), url, ['-c', 'create schema supabase_migrations; create table supabase_migrations.schema_migrations (version text primary key, statements text[], name text); create schema public_test']);
@@ -71,6 +77,15 @@ try {
 
   console.log(`psql.mjs: all assertions passed on throwaway PostgreSQL ${version} (port ${port})`);
 } finally {
-  try { sh('pg_ctl', ['-D', data, '-m', 'immediate', '-w', 'stop']); } catch {}
-  rmSync(dir, { recursive: true, force: true });
+  if (startAttempted) {
+    try { sh('pg_ctl', ['-D', data, '-m', 'fast', '-w', 'stop']); cleanup.server = 'stopped'; }
+    catch { // stop fails when start never got that far; pg_ctl status tells which (exit 3 = not running)
+      let running = false; try { sh('pg_ctl', ['-D', data, 'status']); running = true; } catch {}
+      cleanup.server = running ? 'STOP FAILED: still running' : 'not running (start had not completed)';
+    }
+  }
+  try { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch (e) { cleanup.error = e.message; }
+  cleanup.dir_removed = !existsSync(dir);
+  console.log(`cleanup: ${JSON.stringify({ dir, ...cleanup })}`);
+  if (!cleanup.dir_removed || cleanup.server.startsWith('STOP FAILED')) process.exitCode = 1;
 }

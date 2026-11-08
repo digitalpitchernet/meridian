@@ -3,6 +3,44 @@
 For independent review. Nothing was executed in any round: no target project, no drill run, no write to either
 validation project, no D1, migrations unchanged, Gate 2 paused.
 
+## P-6 evidence (8 Nov 2026): OPEN — UNVERIFIED, execution blocked
+
+**Harness correction** (`tests/recovery/psql.test.mjs`):
+- everything from `initdb` onwards runs inside `try/finally`, so the temp folder is removed even if `initdb` or `pg_ctl start` fails (deletion is retried 5 times);
+- once a start has been attempted, `finally` always runs `pg_ctl stop`; if that fails, `pg_ctl status` reports whether the server is still running;
+- the binary versions are printed first and a `cleanup:` line last;
+- the test exits non-zero if the folder survives or a server is still running.
+
+A leftover empty folder from the first attempt (the defect this fixes) was found and removed.
+
+**Environment search:** none suitable.
+- `C:\Program Files\PostgreSQL\17` is a client-tools install (17.11, no `share/postgres.bki`).
+- No other PostgreSQL server files were found in Program Files, ProgramData, AppData, scoop, msys64, cygwin or xampp.
+- `wsl.exe` has no distribution; no Docker, Podman or PostgreSQL service.
+- A cloud environment was not usable: the repository has no remote, and installing PostgreSQL there needs approval.
+
+Nothing was downloaded or installed. No Supabase connection was made.
+
+**Tested: the `initdb`-failure cleanup path only.**
+
+```
+binaries: postgres (PostgreSQL) 17.11 | initdb (PostgreSQL) 17.11 | psql (PostgreSQL) 17.11
+initdb: error: file "C:/Program Files/PostgreSQL/17/share/postgres.bki" does not exist
+cleanup: {"dir":"C:\\Users\\kunwa\\AppData\\Local\\Temp\\meridian-psql-test-O7J0yp","server":"never started","dir_removed":true}
+exit code: 1
+leftover meridian-psql-test-* folders: 0
+```
+
+**Not tested; P-6 cannot pass until they are:**
+
+| Untested | Why |
+|---|---|
+| `pg_ctl start` failure path (stop attempted, status reported, folder removed) | needs a working `initdb` first |
+| server shutdown after a successful run | needs a running server |
+| every PostgreSQL atomicity assertion: success commits file + history row; an error mid-file leaves neither; a failing history insert rolls back the file; a syntax error leaves nothing; an inner `COMMIT` leaves partial SQL; a failed restore leaves no rows and undoes the TRUNCATE; replica mode skips trigger and FK | needs a running server |
+
+Until the full test passes, the atomicity of R-02 and R-05 rests on the PostgreSQL 17 psql documentation for `-1`, not on a test.
+
 ## Revision 3 → 4 (8 Nov 2026): final focused corrections
 
 | # | Issue | How it is addressed | Where |
