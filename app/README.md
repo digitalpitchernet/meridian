@@ -1,11 +1,30 @@
-# Meridian app (M1)
+# Meridian app (M1 + M2)
 
 The Meridian application: vanilla HTML, CSS and JavaScript with native ES modules. No framework, no build step,
 no dependencies, no external requests.
 
-**Built in M1:** Command Centre, Projects, Tasks, the application shell and the Ctrl/Cmd+K launcher.
-**Not built yet:** Calendar, Milestones, Contacts and Decisions (M2), Finances (M3), Company Vault, Reports and
-Settings (M4). They appear in the navigation as honest "not built yet" pages, never as mock screens.
+**Built:**
+- M1: Command Centre, Projects, Tasks, the application shell and the Ctrl/Cmd+K launcher.
+- M2: Calendar, Milestones, Contacts and Decisions.
+
+**Not built yet:** Finances (M3); Company Vault, Reports and Settings (M4). They appear in the navigation as honest
+"not built yet" pages, never as mock screens.
+
+## M2: schema gaps and app-level rules (flagged for review)
+
+Each item below is either not representable in the Gate 1 schema (so it was **not** built and no column was invented),
+or is enforced by the app but not by the database.
+
+| # | Item | What the app does | What it would need |
+|---|---|---|---|
+| G1 | Milestone **start date** | Not shown: `milestones` has only `due_date` | A migration adding `start_date` |
+| G2 | **Archive** a contact | Not offered: `contacts` has no archive or active flag. Delete is offered, with its consequences listed | A migration adding an archive flag |
+| G3 | **Preserve decided decisions** | Approved, Rejected and Superseded decisions are read-only in the UI. Course changes are recorded by superseding. Only proposals can be deleted | A database rule (trigger or column grants) so no client can overwrite a decided record |
+| G4 | **Supersede atomically** | `decisions.supersede()` performs four writes: new decision, its options, approve it, mark the old one. A failure partway can leave a half-recorded replacement | An RPC that does it in one transaction; only the repository method changes |
+| G5 | **Decision participants** | One project and one contact, as the schema allows | A link table, if more are wanted |
+| G6 | **Rationale required** to record an outcome | Enforced in the app (`decisions.decide`) | Optional: a CHECK or RPC rule |
+| G7 | `milestones.achieved_at` | Set when a milestone becomes Achieved, cleared when it stops being Achieved (same pattern as `projects.completed_at`) | A trigger, if the server should own it |
+| G8 | **Decision reviews** in the Command Centre | Decisions whose `review_date` has arrived appear in "Needs attention"; upcoming reviews appear in the schedule | — |
 
 ## Run it
 
@@ -17,7 +36,7 @@ With XAMPP's Apache running it is also at `http://localhost/meridian/app/`. `app
 the repository root stays denied.
 
 ```bash
-node --test "tests/app/*.test.mjs"   # 24 tests: router, formatting, colour, search, data adapter, projections
+node --test "tests/app/*.test.mjs"   # 38 tests: core, data adapter rules, projections, calendar, contacts, decisions
 ```
 
 ## Data: development fixtures, no backend
@@ -85,10 +104,11 @@ Connecting the backend later means adding `adapters/supabase.js` with the same i
 9. **State previews:** in development only, `#/command?state=loading|empty|error|stale` renders every Command Centre
    panel in that state, for design review.
 
-## Known limits of M1
+## Known limits
 
-- Milestones and calendar events are read-only here. Their modules are M2.
 - Repeating tasks store their rule. Creating the next occurrence is server work for later (Edge Function).
 - The activity actor is always the signed-in founder (single-user V1).
-- The launcher searches modules, actions, projects and tasks, not milestones.
+- The launcher searches modules, actions, projects and tasks, not milestones, contacts or decisions (those modules have their own search).
+- Contact interactions (`contact_interactions`) exist in the schema but are not surfaced: Contacts is deliberately a directory, not a CRM.
+- Calendar events are listed per day in the week view, without an hourly grid.
 - Dates are formatted with `profiles.date_format`. Native date pickers follow the browser's locale.

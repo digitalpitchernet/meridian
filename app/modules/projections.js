@@ -34,7 +34,7 @@ export function kpis({ tasks, projects, milestones }, today) {
 }
 
 // What needs the founder now, most urgent first. kind: overdue | milestone | today | critical
-export function attention({ tasks, milestones, projects }, today, limit = 8) {
+export function attention({ tasks, milestones, projects, decisions = [] }, today, limit = 8) {
   const pname = id => projects.find(p => p.id === id)?.name ?? null;
   const items = [];
   for (const t of tasks.filter(isOpen)) {
@@ -45,6 +45,8 @@ export function attention({ tasks, milestones, projects }, today, limit = 8) {
   for (const m of milestones.filter(m => milestoneLate(m, today))) {
     items.push({ kind: 'milestone', rank: 1, date: m.due_date, milestone: m, project: pname(m.project_id), days: Math.max(0, daysBetween(m.due_date, today)) });
   }
+  // decisions whose review date has arrived (review_date <= today), not superseded
+  for (const d of decisions.filter(d => reviewState(d, today) === 'due')) items.push({ kind: 'review', rank: 1.5, date: d.review_date, decision: d, project: pname(d.project_id), days: daysBetween(d.review_date, today) });
   items.sort((a, b) => a.rank - b.rank || (a.task && b.task ? byPriority(a.task, b.task) : 0) || String(a.date).localeCompare(String(b.date)));
   return { items: items.slice(0, limit), total: items.length };
 }
@@ -61,7 +63,7 @@ export function activeProjects({ projects, tasks, milestones }, today) {
 }
 
 // Next N days, grouped by business-local date: calendar events, open task due dates, open milestone due dates.
-export function schedule({ events, tasks, milestones, projects }, today, timeZone, days = 14) {
+export function schedule({ events, tasks, milestones, projects, decisions = [] }, today, timeZone, days = 14) {
   const end = addDays(today, days - 1);
   const pname = id => projects.find(p => p.id === id)?.name ?? null;
   const out = new Map();
@@ -73,6 +75,7 @@ export function schedule({ events, tasks, milestones, projects }, today, timeZon
   }
   for (const t of tasks.filter(t => isOpen(t) && t.due_date)) put(t.due_date, { kind: 'task', sort: '99', task: t, project: pname(t.project_id) });
   for (const m of milestones.filter(milestoneOpen)) put(m.due_date, { kind: 'milestone', sort: '98', milestone: m, project: pname(m.project_id) });
+  for (const d of decisions.filter(d => d.review_date && d.status !== 'Superseded')) put(d.review_date, { kind: 'review', sort: '97', decision: d, project: pname(d.project_id) });
   return [...out.entries()].sort(([a], [b]) => a.localeCompare(b))
     .map(([date, items]) => ({ date, items: items.sort((a, b) => String(a.sort).localeCompare(String(b.sort))) }));
 }

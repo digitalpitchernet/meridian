@@ -429,3 +429,8 @@ a.kpi:hover { background: var(--surface-hover); }
   .dec-row .chip { min-width: 0; }
   .dec-row .proj-tag { display: none; }
 }
+
+.dot-review { background: var(--info); border-radius: 50%; }
+
+/* grid children must be allowed to shrink below their content width (long titles on phones) */
+.detail-main, .detail-side { min-width: 0; }

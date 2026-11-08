@@ -17,11 +17,11 @@ const LINK = { attention: ['#/tasks', 'All tasks'], projects: ['#/projects', 'Al
 
 async function loadAll(ctx) {
   const today = ctx.today;
-  const [tasks, projects, milestones, events, activity] = await Promise.all([
+  const [tasks, projects, milestones, events, activity, decisions] = await Promise.all([
     ctx.data.tasks.list(), ctx.data.projects.list(), ctx.data.milestones.list(),
     ctx.data.calendar.between(new Date(`${today}T00:00:00Z`).toISOString(), new Date(`${addDays(today, 16)}T00:00:00Z`).toISOString()),
-    ctx.data.activity.recent(8)]);
-  return { today, tasks, projects, milestones, events, activity };
+    ctx.data.activity.recent(8), ctx.data.decisions.list()]);
+  return { today, tasks, projects, milestones, events, activity, decisions };
 }
 
 function panel(id, body, { meta } = {}) {
@@ -49,8 +49,14 @@ function kpiStrip(ctx, d) {
 
 function attentionList(ctx, d) {
   const { items, total } = attention(d, d.today, 8);
-  if (!items.length) return stateBlock('empty', { title: 'Nothing is overdue or due today', body: 'Late milestones and critical work without a date would show here too.' });
+  if (!items.length) return stateBlock('empty', { title: 'Nothing is overdue or due today', body: 'Late milestones, decisions due for review and critical work without a date would show here too.' });
   const rows = items.map(it => {
+    if (it.decision) {
+      const d = it.decision;
+      return h('div', { class: 'att-row' }, h('span', { class: 'att-icon fg-warn' }, icon('decision', { size: 15 })),
+        h('a', { class: 'att-main', href: `#/decisions/${d.id}` }, h('span', { class: 'att-title' }, d.title), h('span', { class: 'att-sub' }, ['Decision review', it.project].filter(Boolean).join(' · '))),
+        h('span', { class: 'att-when fg-warn num' }, it.days ? `review ${it.days}d overdue` : 'review today'));
+    }
     if (it.milestone) {
       const m = it.milestone;
       return h('div', { class: 'att-row' }, h('span', { class: 'att-icon fg-bad' }, icon('flag', { size: 15 })),
@@ -90,7 +96,7 @@ function financeUnavailable(kind) {
 }
 
 function scheduleList(ctx, d) {
-  const days = schedule({ events: d.events, tasks: d.tasks, milestones: d.milestones, projects: d.projects }, d.today, ctx.business.timezone, 14);
+  const days = schedule({ events: d.events, tasks: d.tasks, milestones: d.milestones, projects: d.projects, decisions: d.decisions }, d.today, ctx.business.timezone, 14);
   if (!days.length) return stateBlock('empty', { title: 'Nothing scheduled in the next 14 days' });
   const dayLabel = date => relativeDay(date, d.today) === 'Today' || relativeDay(date, d.today) === 'Tomorrow' ? relativeDay(date, d.today)
     : new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`)) + ' ' + formatShortDate(date, d.today, ctx.profile.date_format);
@@ -102,6 +108,8 @@ function scheduleList(ctx, d) {
         return h('li', { class: 'agenda-item' }, h('span', { class: 'agenda-time num' }, e.is_all_day ? 'All day' : formatTime(e.starts_at, ctx.business.timezone, ctx.profile.time_format)),
           h('span', { class: 'agenda-dot dot-event' }), h('span', { class: 'agenda-title' }, e.title), e.location && h('span', { class: 'agenda-sub' }, e.location));
       }
+      if (it.kind === 'review') return h('li', { class: 'agenda-item' }, h('span', { class: 'agenda-time faint' }, 'Review'), h('span', { class: 'agenda-dot dot-review' }),
+        h('a', { class: 'agenda-title', href: `#/decisions/${it.decision.id}` }, it.decision.title), h('span', { class: 'agenda-sub' }, `Decision${it.project ? ` · ${it.project}` : ''}`));
       if (it.kind === 'milestone') return h('li', { class: 'agenda-item' }, h('span', { class: 'agenda-time faint' }, 'Due'), h('span', { class: 'agenda-dot dot-milestone' }),
         h('a', { class: 'agenda-title', href: `#/projects/${it.milestone.project_id}` }, it.milestone.title), h('span', { class: 'agenda-sub' }, `Milestone · ${it.project ?? ''}`));
       return h('li', { class: 'agenda-item' }, h('span', { class: 'agenda-time faint' }, 'Due'), statusIcon(TASK_STATUS, it.task.status, 13),
@@ -113,7 +121,7 @@ function activityList(ctx, d) {
   if (!d.activity.length) return stateBlock('empty', { title: 'No activity yet' });
   return h('ul', { class: 'cc-activity' }, d.activity.map(a => {
     const x = describeActivity(a);
-    const href = a.entity_table === 'projects' ? `#/projects/${a.entity_id}` : a.entity_table === 'tasks' ? `#/tasks/${a.entity_id}` : null;
+    const href = { projects: `#/projects/${a.entity_id}`, tasks: `#/tasks/${a.entity_id}`, milestones: `#/milestones/${a.entity_id}`, decisions: `#/decisions/${a.entity_id}` }[a.entity_table] ?? null;
     return h('li', null, h('span', { class: 'act-text' }, `${x.verb} ${x.noun} `, href && x.verb !== 'Deleted' ? h('a', { href }, x.label) : h('strong', null, x.label), x.status ? h('span', { class: 'faint' }, ` → ${x.status}`) : null),
       h('span', { class: 'act-time faint' }, timeAgo(a.created_at)));
   }));
@@ -137,7 +145,8 @@ async function renderCommand(ctx, _params, query) {
 
   const setFresh = () => {
     const age = Date.now() - loadedAt;
-    if (forced === 'stale' || age > STALE_MS) mount(freshness, h('span', { class: 'chip tone-warn' }, icon('clock', { size: 12 }), `Updated ${timeAgo(new Date(loadedAt).toISOString())}`), button('Refresh', { kind: 'ghost', size: 'sm', iconName: 'refresh', onClick: draw }));
+    if (!loadedAt) mount(freshness, h('span', { class: 'faint' }, 'Loading…'));
+    else if (forced === 'stale' || age > STALE_MS) mount(freshness, h('span', { class: 'chip tone-warn' }, icon('clock', { size: 12 }), `Updated ${timeAgo(new Date(loadedAt).toISOString())}`), button('Refresh', { kind: 'ghost', size: 'sm', iconName: 'refresh', onClick: draw }));
     else mount(freshness, h('span', { class: 'faint' }, 'Up to date'));
   };
 

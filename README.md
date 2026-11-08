@@ -1,7 +1,7 @@
 # Meridian (DPN): V1 engineering foundation
 
 Gate 1 package: database, security model, financial engine, storage connector and their tests.
-Application (M1: shell, Command Centre, Projects, Tasks on fictional development data, no backend connected): [app/README.md](app/README.md). Run `node tools/serve.mjs`.
+Application (M1 and M2: Command Centre, Projects, Tasks, Calendar, Milestones, Contacts, Decisions on fictional development data, no backend connected): [app/README.md](app/README.md). Run `node tools/serve.mjs`.
 
 - Spec: [docs/ENGINEERING-SPEC.md](docs/ENGINEERING-SPEC.md)
 - Gate 1 report (results, limitations, founder approvals): [docs/GATE-1-REPORT.md](docs/GATE-1-REPORT.md)

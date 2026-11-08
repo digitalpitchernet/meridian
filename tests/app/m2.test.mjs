@@ -186,3 +186,18 @@ test('decisions: superseding preserves the old record and links both ways; chain
   await rejects(r.decisions.supersede(proposed.id, { title: 'x' }, { outcome: 'y' }), '23514');           // not decided yet
   await rejects(r.decisions.supersede(created.id, { title: 'x' }, { outcome: '  ' }), '23502');           // outcome required
 });
+
+import { attention, schedule } from '../../app/modules/projections.js';
+test('Command Centre: decisions due for review join attention (after late milestones) and the schedule', () => {
+  const data = { tasks: f.tasks, projects: f.projects, milestones: f.milestones, decisions: f.decisions, events: f.calendar_events };
+  const { items } = attention(data, TODAY, 50);
+  const kinds = items.map(i => i.kind);
+  const review = items.find(i => i.kind === 'review');
+  assert.equal(review.decision.title, 'Pricing plans for launch'); assert.equal(review.days, 2);
+  assert.ok(kinds.indexOf('milestone') < kinds.indexOf('review') && kinds.indexOf('review') < kinds.indexOf('today'));
+  assert.ok(!items.some(i => i.kind === 'review' && i.decision.status === 'Superseded'));
+  const days = schedule(data, TODAY, 'Asia/Kolkata', 14);
+  assert.ok(days.flatMap(d => d.items).some(i => i.kind === 'review' && i.decision.title === 'Timing of the first raise'));
+  // M1 callers without decisions still work
+  assert.ok(attention({ tasks: f.tasks, projects: f.projects, milestones: f.milestones }, TODAY).items.length > 0);
+});
