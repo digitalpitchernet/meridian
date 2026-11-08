@@ -86,3 +86,41 @@ export function formatCount(n, numberFormat = 'en-IN') {
 }
 
 export function plural(n, one, many = one + 's') { return `${n} ${n === 1 ? one : many}`; }
+
+// Wall-clock 'YYYY-MM-DD' + 'HH:MM' in an IANA zone -> ISO instant (two-pass offset; correct across DST changes)
+export function zonedToUtc(date, time, timeZone) {
+  const [y, mo, d] = date.split('-').map(Number), [hh, mm] = (time || '00:00').split(':').map(Number);
+  const want = Date.UTC(y, mo - 1, d, hh, mm);
+  const offsetAt = t => {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      .formatToParts(new Date(t)).filter(x => x.type !== 'literal').map(x => [x.type, Number(x.value)]));
+    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - t;
+  };
+  let t = want - offsetAt(want);
+  t = want - offsetAt(t);
+  return new Date(t).toISOString();
+}
+// ISO instant -> { date: 'YYYY-MM-DD', time: 'HH:MM' } wall clock in the zone
+export function utcToZoned(iso, timeZone) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    .formatToParts(new Date(iso)).filter(x => x.type !== 'literal').map(x => [x.type, x.value]));
+  return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` };
+}
+const WEEK_START = { Monday: 1, Sunday: 0, Saturday: 6 };
+// weekday 0=Sunday for a 'YYYY-MM-DD'
+export const weekday = date => new Date(`${date}T12:00:00Z`).getUTCDay();
+// first day of the week containing date, per profiles.week_start_day
+export function startOfWeek(date, weekStartDay = 'Monday') {
+  const back = (weekday(date) - WEEK_START[weekStartDay] + 7) % 7;
+  return addDays(date, -back);
+}
+// month grid: weeks (arrays of 7 dates) from the week containing the 1st through the week containing the last day
+export function monthGrid(date, weekStartDay = 'Monday') {
+  const first = `${date.slice(0, 7)}-01`;
+  const last = addDays(addMonths(first, 1), -1);
+  const weeks = [];
+  for (let d = startOfWeek(first, weekStartDay); d <= last; d = addDays(d, 7)) weeks.push(Array.from({ length: 7 }, (_, i) => addDays(d, i)));
+  return weeks;
+}
+export const monthLabel = (date, locale = 'en-IN') => new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${date.slice(0, 7)}-15T12:00:00Z`));
+export const addMonths = (date, n) => { const [y, m] = date.split('-').map(Number); const t = new Date(Date.UTC(y, m - 1 + n, 1)); return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-01`; };

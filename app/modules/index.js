@@ -3,9 +3,13 @@
 import { projectsModule } from './projects.js';
 import { tasksModule } from './tasks.js';
 import { commandModule } from './command.js';
+import { milestonesModule } from './milestones.js';
+import { calendarModule } from './calendar.js';
 
 export const BUILT = {
   command: commandModule,
   projects: projectsModule,
   tasks: tasksModule,
+  milestones: milestonesModule,
+  calendar: calendarModule,
 };

@@ -4,7 +4,9 @@ const CONSTRAINTS = {
   chk_tasks_recurrence: 'Choose both a repeat rule and an interval, or neither.',
   chk_calendar_times: 'The end can’t be before the start.',
 };
-const LABELS = { name: 'Name', title: 'Title', status: 'Status', priority: 'Priority', due_date: 'Due date', target_date: 'Target date', start_date: 'Start date' };
+const LABELS = { name: 'Name', title: 'Title', status: 'Status', priority: 'Priority', due_date: 'Due date', target_date: 'Target date', start_date: 'Start date',
+  project_id: 'Project', first_name: 'First name', category: 'Category', decision_date: 'Decision date', review_date: 'Review date', starts_at: 'Start', ends_at: 'End',
+  superseded_by_id: 'Superseding decision', selected_option_id: 'Selected option', relationship_role: 'Role' };
 
 export function friendlyError(e) {
   const col = e?.details?.column;

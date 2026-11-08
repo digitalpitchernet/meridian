@@ -54,7 +54,7 @@ export function installLauncher(ctx) {
 
     const build = () => {
       const s = q.value;
-      const nav = MODULES.map(m => ({ group: 'Go to', label: m.label, hint: m.milestone === 'M1' ? m.group : `${m.group} · ${m.milestone}`, icon: icon(m.icon, { size: 15 }), run: () => ctx.navigate(m.path), s: score(m.label, s) }));
+      const nav = MODULES.map(m => ({ group: 'Go to', label: m.label, hint: m.milestone === 'M1' || m.built ? m.group : `${m.group} · ${m.milestone}`, icon: icon(m.icon, { size: 15 }), run: () => ctx.navigate(m.path), s: score(m.label, s) }));
       const act = actions.map(a => ({ group: 'Actions', label: a.label, hint: a.hint, icon: icon(a.icon, { size: 15 }), run: a.run, s: score(a.label, s) }));
       const proj = projects.map(p => ({ group: 'Projects', label: p.name, hint: p.status, icon: statusIcon(PROJECT_STATUS, p.status, 14), run: () => ctx.navigate(`/projects/${p.id}`), s: s ? score(p.name, s) : -1 }));
       const task = tasks.map(t => ({ group: 'Tasks', label: t.title, hint: t.status, icon: statusIcon(TASK_STATUS, t.status, 14), run: () => ctx.navigate(`/tasks/${t.id}`), s: s ? score(t.title, s) + (t.status === 'Done' ? -0.5 : 0) : -1 }));

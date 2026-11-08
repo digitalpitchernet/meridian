@@ -134,6 +134,30 @@ export const TABLES = {
     insert: true, update: ['title', 'is_completed', 'sort_order'], delete: true,
     fks: [{ col: 'task_id', ref: 'tasks', onDelete: 'cascade' }],
   },
+  project_contacts: {
+    // composite primary key (business_id, project_id, contact_id); no id column
+    pk: ['business_id', 'project_id', 'contact_id'],
+    columns: { business_id: businessId, project_id: { ...uuid, notNull: true }, contact_id: { ...uuid, notNull: true }, relationship_role: text, created_at: ts },
+    insert: true, update: ['relationship_role'], delete: true,
+    fks: [{ col: 'project_id', ref: 'projects', onDelete: 'cascade' }, { col: 'contact_id', ref: 'contacts', onDelete: 'cascade' }],
+  },
+  contact_interactions: {
+    columns: {
+      id, business_id: businessId, contact_id: { ...uuid, notNull: true }, project_id: uuid,
+      interaction_type: { ...text, notNull: true, enum: ['Meeting', 'Call', 'Email', 'Note', 'Other'] }, occurred_at: { ...ts },
+      summary: { ...text, notNull: true, len: [1, 1e6] }, details: text, created_at: ts, updated_at: ts,
+    },
+    insert: true, update: ['contact_id', 'project_id', 'interaction_type', 'occurred_at', 'summary', 'details'], delete: true,
+    fks: [{ col: 'contact_id', ref: 'contacts', onDelete: 'cascade' }, { col: 'project_id', ref: 'projects', onDelete: 'set null' }],
+  },
+  decision_options: {
+    columns: {
+      id, business_id: businessId, decision_id: { ...uuid, notNull: true }, title: { ...text, notNull: true, len: [1, 300] },
+      description: text, pros: text, cons: text, sort_order: { type: 'int', notNull: true, default: 0 }, created_at: ts,
+    },
+    insert: true, update: ['title', 'description', 'pros', 'cons', 'sort_order'], delete: true,
+    fks: [{ col: 'decision_id', ref: 'decisions', onDelete: 'cascade' }],
+  },
   decisions: {
     columns: {
       id, business_id: businessId, project_id: uuid, contact_id: uuid, title: { ...text, notNull: true, len: [1, 300] },
@@ -142,7 +166,11 @@ export const TABLES = {
       review_date: date, selected_option_id: uuid, superseded_by_id: uuid, created_at: ts, updated_at: ts,
     },
     insert: true, update: ['project_id', 'contact_id', 'title', 'context', 'problem', 'rationale', 'status', 'decision_date', 'review_date', 'selected_option_id', 'superseded_by_id'], delete: true,
-    fks: [{ col: 'project_id', ref: 'projects', onDelete: 'set null' }, { col: 'contact_id', ref: 'contacts', onDelete: 'set null' }],
+    fks: [{ col: 'project_id', ref: 'projects', onDelete: 'set null' }, { col: 'contact_id', ref: 'contacts', onDelete: 'set null' },
+          { col: 'superseded_by_id', ref: 'decisions', onDelete: 'set null' },
+          // fk_decisions_selected_option: (business_id, id, selected_option_id) -> decision_options(business_id, decision_id, id)
+          { col: 'selected_option_id', ref: 'decision_options', match: { decision_id: 'id' }, onDelete: 'set null' }],
+    checks: [r => r.superseded_by_id == null || r.superseded_by_id !== r.id || 'chk_decisions_not_self_superseded'],
     activity: true,
   },
   calendar_events: {

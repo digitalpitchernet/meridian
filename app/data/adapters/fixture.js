@@ -15,7 +15,7 @@ const clone = v => (v === undefined ? v : structuredClone(v));
 const initcap = s => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
 export function createFixtureAdapter({ seed, session, storage = null, storageKey = 'meridian.dev.v1', now = () => new Date(), uuid = () => crypto.randomUUID() }) {
-  const VERSION = 1;
+  const VERSION = 2; // bump when fixtures change shape: older browser snapshots are reseeded
   let db;
   const listeners = new Set();
 
@@ -66,7 +66,8 @@ export function createFixtureAdapter({ seed, session, storage = null, storageKey
     for (const [col, c] of Object.entries(s.columns)) checkColumn(table, col, c, row[col]);
     for (const fk of s.fks || []) {
       const v = row[fk.col];
-      if (v != null && !rows(fk.ref).some(r => r.id === v && r.business_id === row.business_id)) {
+      // composite FKs: the parent must be in the same business, and match any extra column pairs (fk.match: refCol -> ownCol)
+      if (v != null && !rows(fk.ref).some(r => r.id === v && r.business_id === row.business_id && Object.entries(fk.match || {}).every(([rc, oc]) => r[rc] === row[oc]))) {
         throw new DataError(SQLSTATE.fk, `insert or update on table "${table}" violates foreign key constraint on "${fk.col}"`, { column: fk.col });
       }
     }
@@ -176,7 +177,8 @@ export function createFixtureAdapter({ seed, session, storage = null, storageKey
       const row = { ...clone(input), business_id: input.business_id ?? session.business_id };
       if (row.business_id !== session.business_id) throw new DataError(SQLSTATE.privilege, `new row violates row-level security policy for table "${table}"`);
       applyDefaults(table, row);
-      if (rows(table).some(r => r.id === row.id)) throw new DataError(SQLSTATE.unique, `duplicate key value violates unique constraint "${table}_pkey"`);
+      const pk = s.pk || ['id'];
+      if (rows(table).some(r => pk.every(c => r[c] === row[c]))) throw new DataError(SQLSTATE.unique, `duplicate key value violates unique constraint "${table}_pkey"`);
       beforeWrite(table, row, 'insert', Object.keys(input));
       validate(table, row);
       rows(table).push(row);
@@ -212,6 +214,27 @@ export function createFixtureAdapter({ seed, session, storage = null, storageKey
       deleteRow(table, current);
       save();
       return true;
+    },
+
+    // filtered writes, as PostgREST does with ?col=eq.value (needed for composite-key tables such as project_contacts)
+    async updateWhere(table, eq, patch) {
+      const s = spec(table);
+      for (const col of Object.keys(patch)) if (!s.update || !s.update.includes(col)) throw new DataError(SQLSTATE.privilege, `permission denied for table ${table}`, { column: col });
+      const hits = rows(table).filter(r => visible(table, r) && matches(r, { eq }));
+      for (const r of hits) {
+        const next = { ...clone(r), ...clone(patch) };
+        beforeWrite(table, next, 'update', Object.keys(patch)); validate(table, next); Object.assign(r, next);
+        recordActivity(table, 'update', r); emit({ table, op: 'update', row: clone(r) });
+      }
+      if (hits.length) save();
+      return clone(hits);
+    },
+    async removeWhere(table, eq) {
+      if (!spec(table).delete) throw new DataError(SQLSTATE.privilege, `permission denied for table ${table}`);
+      const hits = rows(table).filter(r => visible(table, r) && matches(r, { eq }));
+      for (const r of hits) deleteRow(table, r);
+      if (hits.length) save();
+      return hits.length;
     },
 
     async rpc(name) {

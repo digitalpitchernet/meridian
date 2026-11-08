@@ -56,7 +56,43 @@ export function createRepositories(db) {
     recent: (limit = 20) => db.select('activity_records', { order: [{ col: 'created_at', asc: false }], limit }),
   };
 
-  const contacts = { ...table('contacts'), list: (q = {}) => db.select('contacts', { order: [{ col: 'first_name' }], ...q }) };
+  const contacts = {
+    ...table('contacts'),
+    list: (q = {}) => db.select('contacts', { order: [{ col: 'first_name' }, { col: 'last_name' }], ...q }),
+    // project_contacts has a composite key (business_id, project_id, contact_id)
+    links: (q = {}) => db.select('project_contacts', { order: [{ col: 'created_at' }], ...q }),
+    link: (projectId, contactId, role = null) => db.insert('project_contacts', { project_id: projectId, contact_id: contactId, relationship_role: role }),
+    setRole: (projectId, contactId, role) => db.updateWhere('project_contacts', { project_id: projectId, contact_id: contactId }, { relationship_role: role }),
+    unlink: (projectId, contactId) => db.removeWhere('project_contacts', { project_id: projectId, contact_id: contactId }),
+  };
 
-  return { workspace, projects, milestones, tasks, calendar, activity, contacts };
+  const decisions = {
+    ...table('decisions'),
+    list: (q = {}) => db.select('decisions', { order: [{ col: 'decision_date', asc: false }, { col: 'created_at', asc: false }], ...q }),
+    options: (decisionId) => db.select('decision_options', { eq: { decision_id: decisionId }, order: [{ col: 'sort_order' }, { col: 'created_at' }] }),
+    allOptions: () => db.select('decision_options'),
+    addOption: (row) => db.insert('decision_options', row),
+    updateOption: (id, patch) => db.update('decision_options', id, patch),
+    removeOption: (id) => db.remove('decision_options', id),
+    // Supersede: record the replacement, then point the old decision at it and mark it Superseded.
+    // The old decision's outcome, options and rationale are left untouched (history is preserved).
+    // NOT ATOMIC: two writes. Gate 1 has no RPC for this; when one is added, only this method changes.
+    async supersede(oldId, replacement) {
+      const old = await db.get('decisions', oldId);
+      if (!old) throw Object.assign(new Error('decision not found'), { code: 'P0002' });
+      if (old.status === 'Superseded') throw Object.assign(new Error('this decision has already been superseded'), { code: '23514' });
+      const created = await db.insert('decisions', { project_id: old.project_id, contact_id: old.contact_id, ...replacement });
+      const updated = await db.update('decisions', oldId, { status: 'Superseded', superseded_by_id: created.id });
+      return { created, updated };
+    },
+    // The chain of decisions this one replaced, newest first ([] if none)
+    async history(decisionId) {
+      const all = await db.select('decisions');
+      const chain = []; let cur = decisionId; const seen = new Set();
+      for (;;) { const prev = all.find(d => d.superseded_by_id === cur); if (!prev || seen.has(prev.id)) break; seen.add(prev.id); chain.push(prev); cur = prev.id; }
+      return chain;
+    },
+  };
+
+  return { workspace, projects, milestones, tasks, calendar, activity, contacts, decisions };
 }

@@ -99,6 +99,10 @@ export function buildFixtures(today) {
     ev(3, { title: 'CA review: cap table', project_id: P(2), task_id: T(10), starts_at: ts(3, 11, 0), ends_at: ts(3, 12, 0), location: 'CA office, Indiranagar' }),
     ev(4, { title: 'Design partner check-in', project_id: P(1), starts_at: ts(4, 15, 0), ends_at: ts(4, 15, 30) }),
     ev(5, { title: 'Studio offsite', starts_at: ts(9, 0, 0), ends_at: ts(9, 23, 59), is_all_day: true }),
+    ev(6, { title: 'Investor coffee: Northline (fictional)', project_id: P(2), contact_id: fid('c', 3), starts_at: ts(-2, 11, 0), ends_at: ts(-2, 12, 0), location: 'Koramangala' }),
+    ev(7, { title: 'Weekly planning', starts_at: ts(-6, 9, 30), ends_at: ts(-6, 10, 0) }),
+    ev(8, { title: 'Wordmark review with Kavya', project_id: P(3), contact_id: fid('c', 6), starts_at: ts(16, 14, 0), ends_at: ts(16, 15, 0) }),
+    ev(9, { title: 'Monthly founder update', starts_at: ts(5, 17, 0), ends_at: ts(5, 17, 30) }),
   ];
 
   const C = n => fid('c', n);
@@ -106,6 +110,40 @@ export function buildFixtures(today) {
     base(-40, { id: C(1), first_name: 'Ishaan', last_name: 'Kapoor', organization: 'Fictional Advisors LLP', role: 'Advisor', email: 'ishaan@advisor.example', phone: null, category: 'Advisor', notes: null }),
     base(-35, { id: C(2), first_name: 'Meera', last_name: 'Iyer', organization: 'Partner Co. (fictional)', role: 'Head of Ops', email: 'meera@partner.example', phone: null, category: 'Client', notes: null }),
     base(-20, { id: C(3), first_name: 'Dev', last_name: 'Malhotra', organization: 'Northline Ventures (fictional)', role: 'Partner', email: 'dev@vc.example', phone: null, category: 'Investor', notes: null }),
+    base(-60, { id: C(4), first_name: 'Priya', last_name: 'Nair', organization: 'Nair & Co. Chartered Accountants (fictional)', role: 'CA', email: 'priya@ca.example', phone: '+91 00000 00004', category: 'Vendor', notes: 'Handles statutory filings and the cap table.' }),
+    base(-25, { id: C(5), first_name: 'Arjun', last_name: 'Sethi', organization: 'Loom & Ledger (fictional)', role: 'Product lead', email: 'arjun@partner.example', phone: null, category: 'Partner', notes: 'Design partner #3.' }),
+    base(-15, { id: C(6), first_name: 'Kavya', last_name: null, organization: null, role: 'Type designer', email: 'kavya@type.example', phone: null, category: 'Collaborator', notes: null }),
+  ];
+  const project_contacts = [
+    { business_id: B, project_id: P(2), contact_id: C(3), relationship_role: 'Prospective investor', created_at: ts(-20, 10) },
+    { business_id: B, project_id: P(2), contact_id: C(1), relationship_role: 'Advisor', created_at: ts(-30, 10) },
+    { business_id: B, project_id: P(2), contact_id: C(4), relationship_role: 'Cap table', created_at: ts(-30, 11) },
+    { business_id: B, project_id: P(1), contact_id: C(2), relationship_role: 'Design partner', created_at: ts(-35, 10) },
+    { business_id: B, project_id: P(1), contact_id: C(5), relationship_role: 'Design partner', created_at: ts(-25, 10) },
+    { business_id: B, project_id: P(3), contact_id: C(6), relationship_role: 'Type designer', created_at: ts(-15, 10) },
+  ];
+
+  // decisions: D(1) was superseded by D(2); D(3) is open with options; D(4) is due for review; D(5) was rejected
+  const D = n => fid('r', n), O = n => fid('r', 100 + n);
+  const dec = (n, created, x) => base(created, { id: D(n), project_id: null, contact_id: null, context: '', problem: '', rationale: '', review_date: null, selected_option_id: null, superseded_by_id: null, ...x });
+  // decision_options has created_at but no updated_at (Gate 1 schema)
+  const opt = (n, decision, title, pros, cons, order) => ({ business_id: B, created_at: ts(-40, 9), id: O(n), decision_id: D(decision), title, description: null, pros, cons, sort_order: order });
+  const decision_options = [
+    opt(1, 1, 'Single VPS (fictional Provider A)', 'Cheapest; full control', 'We run upgrades and backups ourselves', 0),
+    opt(2, 1, 'Managed platform', 'No server upkeep', 'Higher monthly cost', 1),
+    opt(3, 2, 'Managed platform with database backups', 'Backups and restores are handled', 'Higher monthly cost', 0),
+    opt(4, 2, 'Stay on the VPS', 'No migration work', 'Backups remain manual', 1),
+    opt(5, 3, 'Raise a pre-seed now', 'Runway for the beta', 'Lower valuation', 0),
+    opt(6, 3, 'Wait for beta traction', 'Better terms', 'Runway gets tight', 1),
+    opt(7, 4, 'Annual plans only', 'Simpler billing', 'Higher upfront ask', 0),
+    opt(8, 4, 'Monthly and annual plans', 'Lower barrier', 'More billing work', 1),
+  ];
+  const decisions = [
+    dec(1, -90, { title: 'Hosting for the beta', project_id: P(1), context: 'We need somewhere to run the private beta.', problem: 'Choose a host for the first five design partners.', rationale: 'Cheapest option while usage is tiny.', status: 'Superseded', decision_date: d(-90), selected_option_id: O(1), superseded_by_id: D(2) }),
+    dec(2, -12, { title: 'Hosting for the beta: move to a managed platform', project_id: P(1), context: 'Manual backups on the VPS were missed twice.', problem: 'Decide whether to keep running our own server.', rationale: 'Backups and restores matter more than the extra monthly cost.', status: 'Approved', decision_date: d(-12), selected_option_id: O(3) }),
+    dec(3, -6, { title: 'Timing of the first raise', project_id: P(2), contact_id: C(1), context: 'Runway is about nine months at current spend.', problem: 'Raise now, or wait for beta traction?', rationale: '', status: 'Proposed', decision_date: d(-6), review_date: d(10) }),
+    dec(4, -60, { title: 'Pricing plans for launch', project_id: null, context: 'Partners asked about pricing.', problem: 'Which billing periods to offer at launch.', rationale: 'Annual plans keep billing simple while we are small.', status: 'Approved', decision_date: d(-60), review_date: d(-2), selected_option_id: O(7) }),
+    dec(5, -30, { title: 'Build a mobile app for V1', project_id: P(1), context: 'One partner asked for a phone app.', problem: 'Is a native app in scope for V1?', rationale: 'Responsive web covers the need; a native app is out of V1 scope.', status: 'Rejected', decision_date: d(-30) }),
   ];
 
   // activity as record_activity() would have written it
@@ -123,5 +161,5 @@ export function buildFixtures(today) {
     act(6, 0, 9, 'projects', 'update', P(3), 'Brand identity refresh', 'Planning'),
   ];
 
-  return { businesses, profiles, participants, projects, milestones, tasks, subtasks, calendar_events, contacts, decisions: [], activity_records };
+  return { businesses, profiles, participants, projects, milestones, tasks, subtasks, calendar_events, contacts, project_contacts, contact_interactions: [], decisions, decision_options, activity_records };
 }

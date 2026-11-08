@@ -10,6 +10,7 @@ import { ENUMS } from '../data/schema.js';
 import { formatShortDate, relativeDay, daysBetween, timeAgo } from '../core/format.js';
 import { projectProgress, isOpen, milestoneOpen, milestoneLate, describeActivity, byPriority } from './projections.js';
 import { taskRows, groupByStatus, quickAdd, sortTasks } from './tasks.js';
+import { openMilestonePanel, milestoneDialog } from './milestones.js';
 
 const VIEWS = ['Current', ...ENUMS.projectStatus, 'All'];
 const CURRENT = ['Planning', 'Active', 'On Hold'];
@@ -164,12 +165,12 @@ async function renderDetail(ctx, params, _q, _path, setCrumbs) {
         h('aside', { class: 'detail-side' },
           h('section', { class: 'side-block' },
             h('h2', { class: 'section-title' }, 'Milestones'),
-            milestones.length ? h('ul', { class: 'milestones' }, milestones.map(m => h('li', { class: ['milestone', milestoneLate(m, ctx.today) && 'is-late'] },
+            milestones.length ? h('ul', { class: 'milestones' }, milestones.map(m => h('li', { class: ['milestone', 'is-clickable', milestoneLate(m, ctx.today) && 'is-late'], tabindex: '0', role: 'button', aria: { label: `Open milestone ${m.title}` }, onclick: () => openMilestonePanel(ctx, m.id), onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openMilestonePanel(ctx, m.id); } } },
               statusIcon(MILESTONE_STATUS, m.status, 14),
               h('div', { class: 'milestone-text' }, h('span', { class: 'milestone-title' }, m.title),
                 h('span', { class: 'faint num' }, `${formatShortDate(m.due_date, ctx.today, ctx.profile.date_format)}${milestoneOpen(m) ? ` · ${relativeDay(m.due_date, ctx.today) || (m.due_date < ctx.today ? `${daysBetween(m.due_date, ctx.today)}d late` : `in ${daysBetween(ctx.today, m.due_date)}d`)}` : ` · ${m.status}`}`)))))
               : h('p', { class: 'faint small' }, 'No milestones yet.'),
-            h('p', { class: 'faint small' }, 'Milestones are edited in the Milestones module (M2).')),
+            button('Add milestone', { kind: 'ghost', size: 'sm', iconName: 'plus', onClick: () => milestoneDialog(ctx, null, { project_id: p.id }) })),
           h('section', { class: 'side-block' },
             h('h2', { class: 'section-title' }, 'Recent activity'),
             related.length ? h('ul', { class: 'activity' }, related.map(a => { const d = describeActivity(a); return h('li', null, h('span', null, `${d.verb} ${d.noun} `, h('strong', null, d.label), d.status ? ` → ${d.status}` : ''), h('span', { class: 'faint' }, timeAgo(a.created_at))); }))

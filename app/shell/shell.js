@@ -20,7 +20,7 @@ export function createShell(ctx) {
       counts[m.id] = count;
       const a = h('a', { class: 'nav-item', href: `#${m.path}`, dataset: { module: m.id } },
         icon(m.icon, { size: 16 }), h('span', { class: 'nav-label' }, m.label), count,
-        m.milestone !== 'M1' && h('span', { class: 'nav-tag', title: `Planned for ${m.milestone}` }, m.milestone));
+        m.milestone !== 'M1' && !m.built && h('span', { class: 'nav-tag', title: `Planned for ${m.milestone}` }, m.milestone));
       navLinks.set(m.id, a);
       return a;
     })));

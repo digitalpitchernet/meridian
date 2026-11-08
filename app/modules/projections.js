@@ -85,3 +85,32 @@ export function describeActivity(a) {
   const verb = op === 'insert' ? 'Created' : op === 'delete' ? 'Deleted' : a.metadata?.status === 'Done' && table === 'tasks' ? 'Completed' : 'Updated';
   return { verb, noun, label, status: op === 'update' && a.metadata?.status && !(table === 'tasks' && a.metadata.status === 'Done') ? a.metadata.status : null };
 }
+
+// ---------- M2: milestones and calendar ----------
+export function milestoneProgress(milestoneId, tasks) { return projectProgress(tasks.filter(t => t.milestone_id === milestoneId)); }
+
+// achieved | cancelled | late | due-soon (≤ 7 days) | upcoming
+export function milestoneState(m, today) {
+  if (m.status === 'Achieved') return 'achieved';
+  if (m.status === 'Cancelled') return 'cancelled';
+  if (milestoneLate(m, today)) return 'late';
+  return daysBetween(today, m.due_date) <= 7 ? 'due-soon' : 'upcoming';
+}
+
+// Calendar entries for [from, to] (inclusive dates), keyed by business-local date.
+// state: done | overdue | today | upcoming | muted ; tasks and milestones appear on their due date.
+export function calendarEntries({ events, tasks, milestones, projects }, from, to, timeZone, today) {
+  const map = new Map();
+  const put = (date, e) => { if (date < from || date > to) return; if (!map.has(date)) map.set(date, []); map.get(date).push(e); };
+  const pname = id => projects.find(p => p.id === id)?.name ?? null;
+  const dated = (date, done) => (done ? 'done' : date < today ? 'overdue' : date === today ? 'today' : 'upcoming');
+  for (const e of events) {
+    let d = todayIn(timeZone, new Date(e.starts_at)); const last = todayIn(timeZone, new Date(e.ends_at));
+    for (let i = 0; d <= last && i < 62; i++, d = addDays(d, 1)) put(d, { kind: 'event', id: e.id, title: e.title, sort: e.is_all_day ? '0' : `1${e.starts_at}`, allDay: e.is_all_day, event: e, project: pname(e.project_id), state: e.ends_at < new Date().toISOString() ? 'done' : 'upcoming' });
+  }
+  for (const t of tasks) if (t.due_date) put(t.due_date, { kind: 'task', id: t.id, title: t.title, sort: '3', task: t, project: pname(t.project_id), state: dated(t.due_date, t.status === 'Done') });
+  for (const m of milestones) put(m.due_date, { kind: 'milestone', id: m.id, title: m.title, sort: '2', milestone: m, project: pname(m.project_id),
+    state: m.status === 'Cancelled' ? 'muted' : m.status === 'Achieved' ? 'done' : milestoneLate(m, today) ? 'overdue' : dated(m.due_date, false) });
+  for (const list of map.values()) list.sort((a, b) => String(a.sort).localeCompare(String(b.sort)) || a.title.localeCompare(b.title));
+  return map;
+}
