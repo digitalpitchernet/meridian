@@ -68,3 +68,22 @@ test('events: handlers receive events; one failing handler does not stop the oth
   console.error = err;
   assert.deepEqual(got, [1, 'x', 'x']);
 });
+
+import { score } from '../../app/core/search.js';
+test('launcher search: prefix > word start > substring > no match', () => {
+  assert.equal(score('Seed round preparation', 'seed'), 3);
+  assert.equal(score('Seed round preparation', 'round'), 2);
+  assert.equal(score('Seed round preparation', 'para'), 1);
+  assert.equal(score('Seed round preparation', 'xyz'), -1);
+  assert.equal(score('Partner #3 onboarding', '  ONBOARD '), 2);
+  assert.equal(score('anything', ''), 0);
+});
+
+import { accentSolid, contrast } from '../../app/core/color.js';
+test('accent: filled buttons always reach WCAG AA text contrast, whatever accent the founder picks', () => {
+  for (const a of ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#FFFFFF', '#000000', '#FDE047', '#0EA5E9']) {
+    const { solid, text } = accentSolid(a);
+    assert.ok(contrast(solid, text) >= 4.5, `${a} -> ${solid}/${text} = ${contrast(solid, text).toFixed(2)}`);
+  }
+  assert.equal(accentSolid('#1E3A8A').solid.toLowerCase(), '#1e3a8a'); // already dark enough: unchanged
+});

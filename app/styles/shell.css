@@ -14,7 +14,7 @@
 .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 12px; }
 .brand-mark {
   width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; flex: none;
-  background: var(--accent); color: var(--text-on-accent); font-weight: 700; font-size: 13px; letter-spacing: -.02em;
+  background: var(--accent-solid); color: var(--text-on-accent); font-weight: 700; font-size: 13px; letter-spacing: -.02em;
 }
 .brand-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
 .brand-name { font-size: var(--text-sm); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -1,3 +1,11 @@
 // Built modules: id -> { routes: [{ pattern, render(ctx, params, query, path, setCrumbs) }] }.
 // Modules not listed here route to the "not built yet" page (modules/placeholder.js).
-export const BUILT = {};
+import { projectsModule } from './projects.js';
+import { tasksModule } from './tasks.js';
+import { commandModule } from './command.js';
+
+export const BUILT = {
+  command: commandModule,
+  projects: projectsModule,
+  tasks: tasksModule,
+};

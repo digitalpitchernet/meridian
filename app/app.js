@@ -2,6 +2,7 @@
 import { data, dataSource, adapter } from './data/index.js';
 import { createRouter } from './core/router.js';
 import { todayIn } from './core/format.js';
+import { accentSolid } from './core/color.js';
 import { bus } from './core/events.js';
 import { h, mount } from './core/dom.js';
 import { createShell } from './shell/shell.js';
@@ -9,15 +10,17 @@ import { MODULES, moduleById } from './modules/registry.js';
 import { renderPlaceholder, renderNotFound } from './modules/placeholder.js';
 import { BUILT } from './modules/index.js';
 import { stateBlock } from './ui/components.js';
+import { installLauncher } from './ui/launcher.js';
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
 function applyTheme(theme) { document.documentElement.dataset.theme = theme; }
 function applyAccent(hex) {
   const root = document.documentElement.style;
-  root.setProperty('--accent', hex);
-  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(c => (c <= .03928 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4));
-  root.setProperty('--text-on-accent', 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? '#0d0e11' : '#ffffff');
+  const { solid, text } = accentSolid(hex);
+  root.setProperty('--accent', hex);          // icons, focus, progress, active tab
+  root.setProperty('--accent-solid', solid);  // filled buttons and the brand mark
+  root.setProperty('--text-on-accent', text);
 }
 
 async function boot() {
@@ -43,6 +46,7 @@ async function boot() {
 
   const shell = createShell(ctx);
   Object.assign(ctx, { openPanel: shell.openPanel, closePanel: shell.closePanel, toast: shell.toast });
+  installLauncher(ctx);
 
   // sidebar counts are a projection of module data, refreshed on every data change
   const refreshCounts = async () => {

@@ -8,8 +8,8 @@
 .btn-sm { height: 26px; padding: 0 9px; font-size: var(--text-xs); }
 .btn-icon { width: 30px; padding: 0; }
 .btn-sm.btn-icon { width: 26px; }
-.btn-primary { background: var(--accent); color: var(--text-on-accent); }
-.btn-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 88%, white); }
+.btn-primary { background: var(--accent-solid); color: var(--text-on-accent); }
+.btn-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent-solid) 90%, black); }
 .btn-secondary { background: var(--surface-2); border-color: var(--border-strong); color: var(--text); }
 .btn-secondary:hover:not(:disabled) { background: var(--surface-hover); }
 .btn-ghost { background: transparent; color: var(--text-2); }

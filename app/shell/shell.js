@@ -58,15 +58,20 @@ export function createShell(ctx) {
     root.classList.toggle('nav-open', open);
     if (open) sidebar.querySelector('.nav-item')?.focus();
   }
-  addEventListener('keydown', e => { if (e.key === 'Escape' && root.classList.contains('nav-open')) setNav(false); });
+  addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || document.querySelector('.backdrop, .menu')) return; // dialogs and menus handle their own Escape
+    if (root.classList.contains('nav-open')) setNav(false);
+    else if (!panel.hidden) api.closePanel();
+  });
   sidebar.addEventListener('click', e => { if (e.target.closest('.nav-item')) setNav(false); });
 
-  return {
+  const api = {
     main, panel,
     setActive(moduleId, trail) {
       for (const [id, a] of navLinks) { a.classList.toggle('active', id === moduleId); a.toggleAttribute('aria-current', id === moduleId); if (id === moduleId) a.setAttribute('aria-current', 'page'); }
       mount(crumbs, trail.map((c, i) => [i > 0 && icon('chevronRight', { size: 12, cls: 'icon crumb-sep' }),
-        c.href && i < trail.length - 1 ? h('a', { class: 'crumb', href: c.href }, c.label) : h('span', { class: 'crumb current' }, c.label)]));
+        i === trail.length - 1 ? h('span', { class: 'crumb current', aria: { current: 'page' } }, c.label)
+          : c.href ? h('a', { class: 'crumb', href: c.href }, c.label) : h('span', { class: 'crumb' }, c.label)]));
       document.title = `${trail[trail.length - 1].label} · Meridian`;
     },
     setCounts(map) { for (const [id, el] of Object.entries(counts)) el.textContent = map[id] ? String(map[id]) : ''; },
@@ -75,7 +80,8 @@ export function createShell(ctx) {
       mount(panel, node); panel.hidden = false; panel.setAttribute('aria-label', label); root.classList.add('panel-open');
       panel._onClose = onClose; requestAnimationFrame(() => panel.querySelector('[autofocus], input, textarea, select, button')?.focus());
     },
-    closePanel() { if (panel.hidden) return; panel.hidden = true; root.classList.remove('panel-open'); clear(panel); panel._onClose?.(); },
+    closePanel() { if (panel.hidden) return; panel.hidden = true; root.classList.remove('panel-open'); clear(panel); const fn = panel._onClose; panel._onClose = null; fn?.(); },
     toast,
   };
+  return api;
 }
