@@ -114,3 +114,11 @@ export function calendarEntries({ events, tasks, milestones, projects }, from, t
   for (const list of map.values()) list.sort((a, b) => String(a.sort).localeCompare(String(b.sort)) || a.title.localeCompare(b.title));
   return map;
 }
+
+// ---------- M2: contacts ----------
+export const contactName = c => [c.first_name, c.last_name].filter(Boolean).join(' ');
+// search across name, organisation, role and email; all words must match (case-insensitive)
+export function contactMatches(c, q) {
+  const hay = [c.first_name, c.last_name, c.organization, c.role, c.email].filter(Boolean).join(' ').toLowerCase();
+  return String(q).toLowerCase().split(/\s+/).filter(Boolean).every(w => hay.includes(w));
+}

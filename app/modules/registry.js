@@ -23,7 +23,7 @@ export const MODULES = [
     planned: ['Accounts and available cash as of a date (get_available_cash)', 'Append-only transactions; corrections by reversal with a reason',
       'Requirement → commitment → payment → reconciliation, with derived commitment status', 'Founder loans and reimbursements kept separate from capital',
       'Capital structure and targets', 'CSV import: stage, decide duplicates, commit atomically'] },
-  { id: 'contacts', group: 'Business', label: 'Contacts', icon: 'users', path: '/contacts', milestone: 'M2',
+  { id: 'contacts', group: 'Business', label: 'Contacts', icon: 'users', path: '/contacts', milestone: 'M2', built: true,
     summary: 'Investors, clients, partners, vendors, advisors and collaborators, with interactions.', tables: ['contacts', 'contact_interactions', 'project_contacts'],
     planned: ['Contacts by category', 'Interaction history (meetings, calls, emails, notes)', 'Links to projects'] },
   { id: 'decisions', group: 'Business', label: 'Decisions', icon: 'decision', path: '/decisions', milestone: 'M2',

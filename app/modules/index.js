@@ -5,6 +5,7 @@ import { tasksModule } from './tasks.js';
 import { commandModule } from './command.js';
 import { milestonesModule } from './milestones.js';
 import { calendarModule } from './calendar.js';
+import { contactsModule } from './contacts.js';
 
 export const BUILT = {
   command: commandModule,
@@ -12,4 +13,5 @@ export const BUILT = {
   tasks: tasksModule,
   milestones: milestonesModule,
   calendar: calendarModule,
+  contacts: contactsModule,
 };

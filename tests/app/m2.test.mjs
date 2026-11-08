@@ -64,3 +64,64 @@ test('calendar entries: tasks, milestones and events on business-local dates wit
   const due = f.tasks.filter(t => t.due_date && t.due_date >= '2026-10-01' && t.due_date <= '2026-12-31');
   assert.equal(all.filter(e => e.kind === 'task').length, due.length);
 });
+
+import { createFixtureAdapter, DataError } from '../../app/data/adapters/fixture.js';
+import { DEV_BUSINESS_ID, DEV_PROFILE_ID } from '../../app/data/fixtures/dev-fixtures.js';
+import { createRepositories } from '../../app/data/repositories.js';
+import { contactMatches, contactName } from '../../app/modules/projections.js';
+const repo = () => { let clock = new Date('2026-11-08T06:00:00Z'); const db = createFixtureAdapter({ seed: () => buildFixtures(TODAY), session: { business_id: DEV_BUSINESS_ID, profile_id: DEV_PROFILE_ID }, now: () => (clock = new Date(clock.getTime() + 1000)) }); return { db, r: createRepositories(db) }; };
+const rejects = async (p, code) => assert.rejects(p, e => e instanceof DataError && e.code === code, `expected ${code}`);
+
+test('contacts: search matches every word across name, organisation, role and email', () => {
+  const c = f.contacts.find(x => x.first_name === 'Priya');
+  assert.equal(contactName(c), 'Priya Nair');
+  assert.ok(contactMatches(c, 'priya')); assert.ok(contactMatches(c, 'nair ca')); assert.ok(contactMatches(c, 'ca.example'));
+  assert.ok(!contactMatches(c, 'priya investor'));
+  assert.equal(contactName({ first_name: 'Kavya', last_name: null }), 'Kavya');
+});
+
+test('contacts: category CHECK, project links with a composite key, roles, unlink', async () => {
+  const { r, db } = repo();
+  await rejects(r.contacts.create({ first_name: 'Nobody', category: 'Friend' }), '23514');
+  await rejects(r.contacts.create({ first_name: '  ', category: 'Other' }), '23514');
+  const c = await r.contacts.create({ first_name: 'Lena', category: 'Vendor' });
+  const p = (await r.projects.list())[0];
+  await r.contacts.link(p.id, c.id, 'Printer');
+  await rejects(r.contacts.link(p.id, c.id), '23505');                                     // composite PK
+  await rejects(r.contacts.link('00000000-0000-4000-8000-0000000000ee', c.id), '23503');    // FK
+  const [updated] = await r.contacts.setRole(p.id, c.id, 'Print vendor');
+  assert.equal(updated.relationship_role, 'Print vendor');
+  await rejects(db.updateWhere('project_contacts', { project_id: p.id, contact_id: c.id }, { project_id: p.id }), '42501'); // only relationship_role is granted
+  assert.equal(await r.contacts.unlink(p.id, c.id), 1);
+  assert.equal((await r.contacts.links({ eq: { contact_id: c.id } })).length, 0);
+});
+
+test('contacts: deleting a contact removes project links and clears decision and event references (schema FKs)', async () => {
+  const { r } = repo();
+  const advisor = f.contacts.find(x => x.first_name === 'Ishaan');
+  assert.ok((await r.contacts.links({ eq: { contact_id: advisor.id } })).length > 0);
+  const dec = (await r.decisions.list({ eq: { contact_id: advisor.id } }))[0];
+  assert.ok(dec);
+  await r.contacts.remove(advisor.id);
+  assert.equal((await r.contacts.links({ eq: { contact_id: advisor.id } })).length, 0, 'project_contacts cascade');
+  assert.equal((await r.decisions.get(dec.id)).contact_id, null, 'decisions.contact_id set null');
+  const investor = f.contacts.find(x => x.first_name === 'Dev');
+  const ev = (await r.calendar.list({ eq: { contact_id: investor.id } }))[0];
+  await r.contacts.remove(investor.id);
+  assert.equal((await r.calendar.get(ev.id)).contact_id, null, 'calendar_events.contact_id set null');
+});
+
+test('relationships: deleting a project keeps tasks, cascades milestones, unlinks contacts; Command Centre inputs stay consistent', async () => {
+  const { r } = repo();
+  const beta = (await r.projects.list()).find(p => p.name === 'Meridian private beta');
+  const ms = await r.milestones.forProject(beta.id);
+  const evs = (await r.calendar.list()).filter(e => e.project_id === beta.id);
+  const linkedTask = (await r.tasks.forProject(beta.id)).find(t => t.milestone_id);
+  await r.projects.remove(beta.id);
+  assert.equal((await r.milestones.forProject(beta.id)).length, 0);
+  const t = await r.tasks.get(linkedTask.id);
+  assert.equal(t.project_id, null); assert.equal(t.milestone_id, null);
+  for (const e of evs) assert.equal((await r.calendar.get(e.id)).project_id, null);
+  assert.equal((await r.contacts.links({ eq: { project_id: beta.id } })).length, 0);
+  for (const m of ms) assert.equal((await r.calendar.list({ eq: { milestone_id: m.id } })).length, 0);
+});

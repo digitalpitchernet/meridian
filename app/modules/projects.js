@@ -11,6 +11,8 @@ import { formatShortDate, relativeDay, daysBetween, timeAgo } from '../core/form
 import { projectProgress, isOpen, milestoneOpen, milestoneLate, describeActivity, byPriority } from './projections.js';
 import { taskRows, groupByStatus, quickAdd, sortTasks } from './tasks.js';
 import { openMilestonePanel, milestoneDialog } from './milestones.js';
+import { openContactPanel } from './contacts.js';
+import { contactName } from './projections.js';
 
 const VIEWS = ['Current', ...ENUMS.projectStatus, 'All'];
 const CURRENT = ['Planning', 'Active', 'On Hold'];
@@ -144,7 +146,7 @@ async function renderDetail(ctx, params, _q, _path, setCrumbs) {
     const p = await ctx.data.projects.get(params.id);
     if (!p) { setCrumbs([{ label: 'Not found' }]); mount(root, stateBlock('empty', { title: 'This project doesn’t exist any more', action: h('a', { class: 'link', href: '#/projects' }, 'Back to projects') })); return; }
     setCrumbs([{ label: p.name }]);
-    const [tasks, milestones, projects, subtasks, activity] = await Promise.all([ctx.data.tasks.forProject(p.id), ctx.data.milestones.forProject(p.id), ctx.data.projects.list(), ctx.data.tasks.allSubtasks(), ctx.data.activity.recent(200)]);
+    const [tasks, milestones, projects, subtasks, activity, links, contacts] = await Promise.all([ctx.data.tasks.forProject(p.id), ctx.data.milestones.forProject(p.id), ctx.data.projects.list(), ctx.data.tasks.allSubtasks(), ctx.data.activity.recent(200), ctx.data.contacts.links({ eq: { project_id: p.id } }), ctx.data.contacts.list()]);
     const ids = new Set([p.id, ...tasks.map(t => t.id), ...milestones.map(m => m.id)]);
     const related = activity.filter(a => ids.has(a.entity_id)).slice(0, 8);
     const open = sortTasks(tasks.filter(isOpen)), done = tasks.filter(t => !isOpen(t)).sort((a, b) => (b.completed_at || '').localeCompare(a.completed_at || ''));
@@ -172,6 +174,10 @@ async function renderDetail(ctx, params, _q, _path, setCrumbs) {
               : h('p', { class: 'faint small' }, 'No milestones yet.'),
             button('Add milestone', { kind: 'ghost', size: 'sm', iconName: 'plus', onClick: () => milestoneDialog(ctx, null, { project_id: p.id }) })),
           h('section', { class: 'side-block' },
+            h('h2', { class: 'section-title' }, `People · ${links.length}`),
+            links.length ? h('ul', { class: 'milestones' }, links.map(l => { const c = contacts.find(x => x.id === l.contact_id); return c && h('li', { class: ['milestone', 'is-clickable'], tabindex: '0', role: 'button', aria: { label: `Open contact ${contactName(c)}` }, onclick: () => openContactPanel(ctx, c.id), onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openContactPanel(ctx, c.id); } } }, h('div', { class: 'milestone-text' }, h('span', { class: 'milestone-title' }, contactName(c)), h('span', { class: 'faint num' }, [l.relationship_role, c.organization].filter(Boolean).join(' · ') || c.category))); }))
+              : h('p', { class: 'faint small' }, 'No contacts linked. Link them from a contact.')),
+          h('section', { class: 'side-block' },
             h('h2', { class: 'section-title' }, 'Recent activity'),
             related.length ? h('ul', { class: 'activity' }, related.map(a => { const d = describeActivity(a); return h('li', null, h('span', null, `${d.verb} ${d.noun} `, h('strong', null, d.label), d.status ? ` → ${d.status}` : ''), h('span', { class: 'faint' }, timeAgo(a.created_at))); }))
               : h('p', { class: 'faint small' }, 'Nothing yet.')))));
@@ -179,7 +185,7 @@ async function renderDetail(ctx, params, _q, _path, setCrumbs) {
   await draw();
   let timer = null;
   ctx.onLeave(ctx.bus.on('data:changed', ch => {
-    if (!['projects', 'tasks', 'milestones', 'subtasks', '*'].includes(ch.table)) return;
+    if (!['projects', 'tasks', 'milestones', 'subtasks', 'project_contacts', 'contacts', '*'].includes(ch.table)) return;
     clearTimeout(timer);
     timer = setTimeout(async () => {
       const a = document.activeElement;

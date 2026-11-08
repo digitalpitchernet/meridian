@@ -376,3 +376,25 @@ a.kpi:hover { background: var(--surface-hover); }
   .ms-row .progress { display: none; }
   .cal-agenda .agenda-day { grid-template-columns: 1fr; }
 }
+
+/* ---------- contacts ---------- */
+.search-input { height: 36px; margin-bottom: var(--space-3); background: var(--surface); max-width: 520px; }
+.contact-row { gap: 10px; padding-left: 8px; }
+.contact-main { display: grid; gap: 0; height: auto; padding: 7px 4px; }
+.contact-email { color: var(--text-2); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.contact-email:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.contact-head { display: flex; align-items: center; gap: 12px; }
+.contact-head > div { flex: 1; min-width: 0; }
+.detail-list { font-size: var(--text-sm); gap: 6px 16px; }
+.contact-notes { white-space: pre-wrap; color: var(--text-2); font-size: var(--text-sm); border-left: 2px solid var(--border-strong); padding-left: 10px; }
+.link-list { list-style: none; margin: 0 0 8px; padding: 0; display: grid; }
+.link-list li { display: flex; align-items: center; gap: 8px; min-height: 36px; border-bottom: 1px solid var(--border); }
+.link-main { flex: 1; min-width: 0; font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-main:hover { text-decoration: underline; text-underline-offset: 3px; }
+.role-input { max-width: 150px; font-size: var(--text-xs); }
+.link-add { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto; gap: 6px; }
+.link-add .select-sm, .link-add .input { min-width: 0; height: 30px; }
+@media (max-width: 767px) {
+  .contact-email { display: none; }
+  .link-add { grid-template-columns: 1fr; }
+}
