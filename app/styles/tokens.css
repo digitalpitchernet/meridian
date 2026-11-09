@@ -1,20 +1,29 @@
 /* Meridian design tokens. Dark is the default; light and system follow profiles.theme.
    --accent comes from businesses.accent_color (founder-configurable) and is set at runtime.
-   Semantic colours are deliberately independent of the accent. */
+   Semantic colours are deliberately independent of the accent.
+   Hierarchy comes from surface level, type and spacing. Glass is reserved for floating, contextual
+   surfaces (launcher, menus, toasts, the mobile drawer); cards and panels stay solid. */
 :root {
   --accent: #3B82F6;
   --accent-solid: #2f6fd6;
 
+  /* UI text and all figures: system stack with tabular numerals. Display: Urbanist (bundled, SIL OFL)
+     for the brand, page titles and headline KPI numerals only, never for tables or money columns. */
   --font-sans: "Inter", "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-display: "Urbanist", "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Mono", "SF Mono", ui-monospace, Consolas, monospace;
 
-  --text-2xs: 11px; --text-xs: 12px; --text-sm: 13px; --text-md: 14px; --text-lg: 16px; --text-xl: 20px; --text-2xl: 26px;
+  --text-2xs: 11px; --text-xs: 12px; --text-sm: 13px; --text-md: 14px; --text-lg: 16px; --text-xl: 24px; --text-2xl: 28px; --text-display: 34px;
   --lh-tight: 1.25; --lh: 1.45;
 
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
-  --radius-sm: 4px; --radius: 6px; --radius-lg: 8px;
+  --radius-sm: 5px; --radius: 7px; --radius-lg: 10px; --radius-xl: 14px; --radius-pill: 999px;
+  --control-h: 32px; --control-h-sm: 26px; --row-h: 44px;
 
-  --sidebar-w: 232px; --header-h: 48px; --panel-w: 400px; --content-max: 1240px;
+  /* layout: fluid 12-column pages up to --content-max; forms and detail pages use --content-read */
+  --sidebar-w: 240px; --header-h: 52px; --panel-w: 420px; --content-max: 1440px; --content-read: 760px;
+  --page-pad: var(--space-8); --section-gap: var(--space-8); --grid-gap: var(--space-4);
+  --glass-blur: blur(18px) saturate(150%);
 
   --ease: cubic-bezier(.2, .8, .2, 1);
   --dur-fast: 90ms; --dur: 160ms;
@@ -45,13 +54,17 @@
   --info: #6aa7e8; --info-soft: rgba(106, 167, 232, .14);
   --idle: #8a8e97; --idle-soft: rgba(138, 142, 151, .14);
   --dev: #c58af0;  --dev-soft: rgba(197, 138, 240, .13);
+
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --glass: rgba(24, 26, 31, .8); --glass-border: rgba(255, 255, 255, .09);
+  --shadow-card: none;
 }
 
 /* ---- light ---- */
 [data-theme="light"] {
   color-scheme: light;
-  --bg: #fbfbfc;
-  --bg-sunken: #f3f4f6;
+  --bg: #f6f6f8;
+  --bg-sunken: #eff0f2;
   --surface: #ffffff;
   --surface-2: #f7f7f9;
   --surface-hover: #f1f2f4;
@@ -60,31 +73,34 @@
   --border-strong: rgba(16, 18, 24, .15);
   --text: #16181d;
   --text-2: #4e535c;
-  --text-3: #696e77; /* ≥ 4.5:1 on --bg, --surface and --bg-sunken */
+  --text-3: #62676f; /* ≥ 4.5:1 on --bg, --surface, --surface-2 and --bg-sunken */
   --focus: color-mix(in srgb, var(--accent) 80%, black);
   --overlay: rgba(20, 22, 28, .32);
   --shadow-pop: 0 12px 32px rgba(20, 22, 28, .14), 0 0 0 1px rgba(16, 18, 24, .08);
 
-  --ok: #1f8a63;   --ok-soft: rgba(31, 138, 99, .1);
+  --ok: #1a7d59;   --ok-soft: rgba(26, 125, 89, .1); /* was #1f8a63: 4.3:1 on white, below AA */
   --warn: #8f5e05; --warn-soft: rgba(168, 112, 12, .1);
   --bad: #c8412f;  --bad-soft: rgba(200, 65, 47, .09);
   --info: #2f6db3; --info-soft: rgba(47, 109, 179, .09);
   --idle: #6b7079; --idle-soft: rgba(107, 112, 121, .1);
   --dev: #8a3fc0;  --dev-soft: rgba(138, 63, 192, .09);
+  --glass: rgba(255, 255, 255, .82); --glass-border: rgba(16, 18, 24, .08);
+  --shadow-card: 0 1px 2px rgba(20, 22, 28, .04);
 }
 
 /* ---- system: follow the OS when the profile says 'system' ---- */
 @media (prefers-color-scheme: light) {
   [data-theme="system"] {
     color-scheme: light;
-    --bg: #fbfbfc; --bg-sunken: #f3f4f6; --surface: #ffffff; --surface-2: #f7f7f9; --surface-hover: #f1f2f4; --surface-active: #e9eaed;
+    --bg: #f6f6f8; --bg-sunken: #eff0f2; --surface: #ffffff; --surface-2: #f7f7f9; --surface-hover: #f1f2f4; --surface-active: #e9eaed;
     --border: rgba(16, 18, 24, .085); --border-strong: rgba(16, 18, 24, .15);
-    --text: #16181d; --text-2: #4e535c; --text-3: #696e77; /* ≥ 4.5:1 on --bg, --surface and --bg-sunken */
+    --text: #16181d; --text-2: #4e535c; --text-3: #62676f; /* ≥ 4.5:1 on --bg, --surface, --surface-2 and --bg-sunken */
     --focus: color-mix(in srgb, var(--accent) 80%, black); --overlay: rgba(20, 22, 28, .32);
     --shadow-pop: 0 12px 32px rgba(20, 22, 28, .14), 0 0 0 1px rgba(16, 18, 24, .08);
-    --ok: #1f8a63; --ok-soft: rgba(31, 138, 99, .1); --warn: #8f5e05; --warn-soft: rgba(168, 112, 12, .1);
+    --ok: #1a7d59; --ok-soft: rgba(26, 125, 89, .1); --warn: #8f5e05; --warn-soft: rgba(168, 112, 12, .1);
     --bad: #c8412f; --bad-soft: rgba(200, 65, 47, .09); --info: #2f6db3; --info-soft: rgba(47, 109, 179, .09);
     --idle: #6b7079; --idle-soft: rgba(107, 112, 121, .1); --dev: #8a3fc0; --dev-soft: rgba(138, 63, 192, .09);
+    --glass: rgba(255, 255, 255, .82); --glass-border: rgba(16, 18, 24, .08); --shadow-card: 0 1px 2px rgba(20, 22, 28, .04);
   }
 }
 

@@ -1,3 +1,7 @@
+@font-face {
+  font-family: "Urbanist"; src: url("fonts/Urbanist-wght.ttf") format("truetype");
+  font-weight: 100 900; font-style: normal; font-display: swap;
+}
 *, *::before, *::after { box-sizing: border-box; }
 html, body { height: 100%; }
 body {
@@ -19,6 +23,11 @@ button { cursor: pointer; }
 ::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
 
 .num, .tabular { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+.display { font-family: var(--font-display); letter-spacing: -.015em; }
+
+/* restrained glass: floating, contextual surfaces only (opt-in) */
+.glass { background: var(--glass); border: 1px solid var(--glass-border); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .glass { background: var(--surface-2); } }
 .mono { font-family: var(--font-mono); font-size: .92em; }
 .muted { color: var(--text-2); }
 .faint { color: var(--text-3); }

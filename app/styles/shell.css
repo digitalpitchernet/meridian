@@ -32,6 +32,7 @@
 }
 .nav-item .icon { color: var(--text-3); flex: none; }
 .nav-item:hover { background: var(--surface-hover); color: var(--text); }
+.nav-item:focus-visible { outline: none; background: var(--surface-hover); color: var(--text); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
 .nav-item.active { background: var(--surface-active); color: var(--text); }
 .nav-item.active .icon { color: var(--accent); }
 .nav-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
