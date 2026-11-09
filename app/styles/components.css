@@ -2,7 +2,7 @@
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; padding: 0 11px;
   border-radius: var(--radius); border: 1px solid transparent; font-size: var(--text-sm); font-weight: 500; white-space: nowrap;
-  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn-sm { height: 26px; padding: 0 9px; font-size: var(--text-xs); }
@@ -10,16 +10,21 @@
 .btn-sm.btn-icon { width: 26px; }
 .btn-primary { background: var(--accent-solid); color: var(--text-on-accent); }
 .btn-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent-solid) 90%, black); }
+.btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
 .btn-secondary { background: var(--surface-2); border-color: var(--border-strong); color: var(--text); }
 .btn-secondary:hover:not(:disabled) { background: var(--surface-hover); }
+.btn-secondary:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--text) 15%, transparent); }
 .btn-ghost { background: transparent; color: var(--text-2); }
 .btn-ghost:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
-.btn-danger { background: var(--bad-soft); color: var(--bad); }
+.btn-ghost:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--text) 15%, transparent); }
+.btn-danger { background: var(--bad-soft); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
 .btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--bad) 24%, transparent); }
+.btn-danger:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 35%, transparent); }
 .btn-search {
   justify-content: flex-start; width: calc(100% - 4px); background: var(--surface); border-color: var(--border); color: var(--text-3); font-weight: 400;
 }
 .btn-search:hover { border-color: var(--border-strong); color: var(--text-2); }
+.btn-search:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
 .btn-search span { flex: 1; text-align: left; }
 .kbd {
   font: 500 10.5px/16px var(--font-sans); padding: 0 5px; border-radius: 4px; border: 1px solid var(--border-strong);
@@ -30,8 +35,10 @@
 /* ---- segmented control ---- */
 .seg { display: inline-flex; padding: 2px; gap: 1px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 .seg-btn { display: grid; place-items: center; width: 24px; height: 22px; border: 0; border-radius: 4px; background: transparent; color: var(--text-3); }
-.seg-btn:hover { color: var(--text); }
+.seg-btn:hover { color: var(--text); background: var(--surface-hover); }
+.seg-btn:focus-visible { outline: none; color: var(--text); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
 .seg-btn[aria-checked="true"] { background: var(--surface-active); color: var(--text); }
+.seg-btn[aria-checked="true"]:focus-visible { outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
 
 /* ---- chips, avatar, links ---- */
 .chip { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: 99px; font-size: var(--text-2xs); font-weight: 500; white-space: nowrap; }
@@ -47,6 +54,7 @@
 }
 .link { color: var(--accent); }
 .link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.link:focus-visible { outline: none; text-decoration: underline; text-underline-offset: 3px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
 .code-chip { font: 500 var(--text-xs) var(--font-mono); padding: 2px 7px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-2); }
 
 /* ---- page scaffolding ---- */
@@ -86,6 +94,9 @@
   transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 .toast.tone-bad { color: var(--text); border-left: 3px solid var(--bad); }
+.toast.tone-warn { border-left: 3px solid var(--warn); }
+.toast.tone-ok { border-left: 3px solid var(--ok); }
+.toast.tone-info { border-left: 3px solid var(--info); }
 .toast.out { opacity: 0; transform: translateY(4px); }
 
 @media (max-width: 767px) {
