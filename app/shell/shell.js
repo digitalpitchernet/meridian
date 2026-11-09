@@ -32,7 +32,7 @@ export function createShell(ctx) {
   const sidebar = h('aside', { class: 'sidebar', id: 'sidebar', aria: { label: 'Main navigation' } },
     h('div', { class: 'brand' },
       h('span', { class: 'brand-mark', aria: { hidden: true } }, 'M'),
-      h('div', { class: 'brand-text' }, h('strong', { class: 'brand-name' }, ctx.business.business_name), h('span', { class: 'brand-sub' }, 'Meridian'))),
+      h('div', { class: 'brand-text' }, h('span', { class: 'brand-product' }, 'Meridian'), h('strong', { class: 'brand-name', title: ctx.business.business_name }, ctx.business.business_name))),
     button('Search or jump to…', { kind: 'search', iconName: 'search', kbd: ctx.isMac ? '⌘K' : 'Ctrl K', onClick: () => ctx.openLauncher(), cls: 'sidebar-search' }),
     h('nav', { class: 'nav' }, navGroups),
     h('div', { class: 'sidebar-foot' },
