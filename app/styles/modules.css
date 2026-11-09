@@ -19,13 +19,14 @@
 .chip-btn:hover { border-color: var(--border-strong); background: var(--surface-hover); }
 
 /* ---------- tabs ---------- */
-.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: var(--space-4); overflow-x: auto; scrollbar-width: none; }
+/* view switcher: segmented navigation on a glass track (pills are reserved for this, chips and filters) */
+.tabs { display: flex; width: fit-content; max-width: 100%; gap: 2px; padding: 3px; margin-bottom: var(--space-5); border-radius: var(--radius-pill); overflow-x: auto; scrollbar-width: none; background: var(--glass); border: 1px solid var(--glass-border); box-shadow: var(--glass-hi); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
 .tab {
-  display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 10px; font-size: var(--text-sm); font-weight: 500; color: var(--text-2);
-  border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px; border-radius: var(--radius-pill); font-size: var(--text-sm); font-weight: 500; color: var(--text-2);
+  white-space: nowrap; flex: none; transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
-.tab:hover { color: var(--text); border-bottom-color: var(--border-strong); }
-.tab.active { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
+.tab:hover { color: var(--text); background: var(--surface-hover); }
+.tab.active { color: var(--text); font-weight: 600; background: var(--surface-2); box-shadow: var(--shadow-card), 0 0 0 1px var(--border); }
 .tab-count { font-size: var(--text-2xs); color: var(--text-3); }
 
 /* ---------- quick add ---------- */
@@ -152,7 +153,7 @@
 
 /* ---------- side panel (task editor) ---------- */
 .panel { display: flex; flex-direction: column; min-height: 100%; }
-.panel-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; height: var(--header-h); padding: 0 var(--space-3) 0 var(--space-5); border-bottom: 1px solid var(--border); background: var(--surface); }
+.panel-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; height: var(--header-h); padding: 0 var(--space-3) 0 var(--space-5); border-bottom: 1px solid var(--border); background: var(--glass-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
 .panel-kicker { font-size: var(--text-xs); color: var(--text-3); font-weight: 500; }
 .panel-body { padding: var(--space-4) var(--space-5) var(--space-6); display: grid; gap: var(--space-4); }
 .title-input { font-size: var(--text-lg); font-weight: 600; border-color: transparent; background: transparent; padding: 4px 6px; margin-left: -6px; resize: none; overflow: hidden; min-height: 34px; }

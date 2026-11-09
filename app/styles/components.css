@@ -1,12 +1,12 @@
 /* ---- buttons ---- */
 .btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: var(--control-h); padding: 0 12px;
-  border-radius: var(--radius); border: 1px solid transparent; font-size: var(--text-sm); font-weight: 500; white-space: nowrap;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: var(--control-h); padding: 0 14px;
+  border-radius: var(--radius); border: 1px solid transparent; font-size: var(--text-sm); font-weight: 600; white-space: nowrap;
   transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn:active:not(:disabled) { transform: translateY(1px); }
-.btn-sm { height: var(--control-h-sm); padding: 0 9px; font-size: var(--text-xs); }
+.btn-sm { height: var(--control-h-sm); padding: 0 10px; border-radius: var(--radius-sm); font-size: var(--text-xs); }
 .btn-icon { width: var(--control-h); padding: 0; }
 .btn-sm.btn-icon { width: var(--control-h-sm); }
 .btn-primary { background: var(--accent-solid); color: var(--text-on-accent); }
@@ -22,7 +22,8 @@
 .btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--bad) 24%, transparent); }
 .btn-danger:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 35%, transparent); }
 .btn-search {
-  justify-content: flex-start; width: calc(100% - 4px); background: var(--surface); border-color: var(--border); color: var(--text-3); font-weight: 400;
+  justify-content: flex-start; width: calc(100% - 4px); border-radius: var(--radius-pill); padding: 0 8px 0 14px; color: var(--text-3); font-weight: 400;
+  background: var(--glass); border-color: var(--glass-border); box-shadow: var(--glass-hi); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
 }
 .btn-search:hover { border-color: var(--border-strong); color: var(--text-2); }
 .btn-search:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
@@ -34,7 +35,7 @@
 .btn-primary .kbd { background: transparent; border-color: color-mix(in srgb, var(--text-on-accent) 35%, transparent); color: inherit; opacity: .8; }
 
 /* ---- segmented control ---- */
-.seg { display: inline-flex; padding: 2px; gap: 1px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-pill); }
+.seg { display: inline-flex; padding: 2px; gap: 1px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-pill); }
 .seg-btn { display: grid; place-items: center; width: 26px; height: 22px; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--text-3); }
 .seg-btn:hover { color: var(--text); background: var(--surface-hover); }
 .seg-btn:focus-visible { outline: none; color: var(--text); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
@@ -63,14 +64,14 @@
 .page-narrow { max-width: calc(var(--content-read) + 2 * var(--page-pad)); }
 .page-header { display: flex; align-items: flex-start; gap: var(--space-4); margin-bottom: var(--space-6); flex-wrap: wrap; }
 .page-header-text { flex: 1; min-width: 220px; }
-.page-title { font: 650 var(--text-xl)/1.15 var(--font-display); letter-spacing: -.02em; }
-.page-subtitle { color: var(--text-2); margin-top: 6px; font-size: var(--text-sm); max-width: 640px; }
+.page-title { font: 500 clamp(30px, 3.2vw, 44px)/1.05 var(--font-display); letter-spacing: -.03em; }
+.page-subtitle { color: var(--text-2); margin-top: 8px; font-size: var(--text-md); max-width: 640px; }
 .page-actions { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
 .section-title { font-size: var(--text-sm); font-weight: 600; color: var(--text); margin-bottom: var(--space-3); }
 .plain-section { margin-top: var(--space-6); }
 .plain-list { margin: 0; padding-left: 18px; color: var(--text-2); display: grid; gap: 6px; }
 .table-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.notice { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: var(--space-4); background: var(--surface); display: grid; gap: 6px; }
+.notice { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: var(--space-4) var(--space-5); background: var(--surface); box-shadow: var(--shadow-card); display: grid; gap: 6px; }
 .notice-head { display: flex; align-items: center; gap: 8px; color: var(--text); }
 .notice-head .icon { color: var(--warn); }
 
@@ -104,5 +105,44 @@
 @media (max-width: 767px) {
   .page { padding: var(--space-4) var(--space-4) var(--space-8); }
   .page-narrow { max-width: none; }
-  .page-title { font-size: 21px; }
+  .page-title { font-size: 30px; }
 }
+
+/* ---- surfaces: the reusable card system ----
+   matte: dense data and lists; raised: cards and focal objects; glass: contextual, floating; sig: the one signature surface */
+.card { border-radius: var(--radius-xl); border: 1px solid var(--border); background: var(--surface-2); box-shadow: var(--shadow-card); min-width: 0; }
+.card-matte { background: var(--surface); }
+.card-glass { background: var(--glass); border-color: var(--glass-border); box-shadow: var(--glass-hi); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+.card-sig { position: relative; overflow: hidden; border: 0; border-radius: var(--radius-2xl); background: var(--sig-bg); color: var(--sig-text); box-shadow: var(--shadow-sig); isolation: isolate; }
+/* the meridian motif: faint longitude lines, decoration only */
+.card-sig::before {
+  content: ""; position: absolute; z-index: -1; right: -150px; top: -170px; width: 520px; height: 520px; border-radius: 50%; pointer-events: none;
+  border: 1px solid rgba(255, 220, 195, .2);
+  background:
+    radial-gradient(closest-side, transparent calc(100% - 1px), rgba(255, 220, 195, .16) calc(100% - 1px) 100%, transparent 100%) center / 73% 100% no-repeat,
+    radial-gradient(closest-side, transparent calc(100% - 1px), rgba(255, 220, 195, .13) calc(100% - 1px) 100%, transparent 100%) center / 48% 100% no-repeat,
+    radial-gradient(closest-side, transparent calc(100% - 1px), rgba(255, 220, 195, .1) calc(100% - 1px) 100%, transparent 100%) center / 23% 100% no-repeat,
+    linear-gradient(rgba(255, 220, 195, .12), rgba(255, 220, 195, .12)) center / 100% 1px no-repeat;
+}
+
+/* ---- data visualisation primitives ---- */
+/* ring gauge: --pct (0–100) is set per element through CSSOM; it animates when the value changes */
+@property --pct { syntax: "<number>"; inherits: true; initial-value: 0; }
+.ring {
+  --size: 84px; --thick: 8px; position: relative; width: var(--size); height: var(--size); flex: none; border-radius: 50%; display: grid; place-items: center;
+  background: conic-gradient(var(--ring-color, var(--accent)) calc(var(--pct) * 1%), var(--track) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--thick)), #000 calc(100% - var(--thick) + 1px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - var(--thick)), #000 calc(100% - var(--thick) + 1px));
+  transition: --pct var(--dur-slow) var(--ease-out);
+}
+.ring-wrap { position: relative; display: grid; place-items: center; flex: none; }
+.ring-label { position: absolute; inset: 0; display: grid; place-items: center; font: 600 22px/1 var(--font-display); letter-spacing: -.02em; }
+/* meter: a segmented horizontal bar; segments size by flex-grow set through CSSOM */
+.meter { display: flex; gap: 3px; height: 10px; min-width: 0; }
+.meter > span { min-width: 4px; border-radius: 4px; transition: flex-grow var(--dur-slow) var(--ease-out); }
+.meter > span:first-child { border-top-left-radius: 999px; border-bottom-left-radius: 999px; }
+.meter > span:last-child { border-top-right-radius: 999px; border-bottom-right-radius: 999px; }
+.meter .seg-ok { background: var(--ok); } .meter .seg-bad { background: var(--bad); } .meter .seg-warn { background: var(--warn); }
+.meter .seg-info { background: var(--info); } .meter .seg-hatch { background: var(--hatch); box-shadow: inset 0 0 0 1px var(--border-strong); }
+.meter .seg-bad-2 { background: color-mix(in srgb, var(--bad) 55%, var(--surface)); }
+.legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 3px; flex: none; }
