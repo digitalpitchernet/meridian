@@ -1,0 +1,15 @@
+# Minimal Supabase CLI configuration. `supabase start` fills every other setting with CLI defaults.
+# Migrations in supabase/migrations are forward-only and authoritative (see docs/ENGINEERING-SPEC.md §9).
+project_id = "meridian"
+
+[db]
+major_version = 17
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+# Founders sign up once; email confirmation stays on in every real environment.
+enable_signup = true

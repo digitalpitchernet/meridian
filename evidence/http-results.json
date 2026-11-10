@@ -1,0 +1,342 @@
+{
+  "suite": "http",
+  "run": "20261107230310-da6bd3",
+  "project": "https://xwopffsacsctvjjwnxnw.supabase.co",
+  "node": "v24.15.0",
+  "ran_at": "2026-11-07T23:03:19.127Z",
+  "summary": {
+    "PASS": 46,
+    "INFO": 1
+  },
+  "results": [
+    {
+      "test_id": "H-AUTH-01",
+      "description": "user a signs in through GoTrue",
+      "status": "PASS",
+      "expected": "200 + token",
+      "actual": "200/200"
+    },
+    {
+      "test_id": "H-AUTH-02",
+      "description": "user b signs in through GoTrue",
+      "status": "PASS",
+      "expected": "200 + token",
+      "actual": "200/200"
+    },
+    {
+      "test_id": "H-AUTH-03",
+      "description": "user c signs in through GoTrue",
+      "status": "PASS",
+      "expected": "200 + token",
+      "actual": "200/200"
+    },
+    {
+      "test_id": "H-ANON-01",
+      "description": "anon cannot read businesses",
+      "status": "PASS",
+      "expected": "denied or []",
+      "actual": "401 {\"code\":\"42501\",\"details\":null,\"hint\":\"Grant the required privileges to the current role with: GRANT SELECT ON public.businesses TO anon;\",\""
+    },
+    {
+      "test_id": "H-ANON-02",
+      "description": "anon cannot insert",
+      "status": "PASS",
+      "expected": "401/403",
+      "actual": "401 {\"code\":\"42501\",\"details\":null,\"hint\":\"Grant the required privileges to the current role with: GRANT SELECT, INSERT ON public.contacts TO an"
+    },
+    {
+      "test_id": "H-ANON-03",
+      "description": "anon cannot call create_workspace",
+      "status": "PASS",
+      "expected": "401/403",
+      "actual": "401 {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"permission denied for function create_workspace\"}"
+    },
+    {
+      "test_id": "H-ANON-04",
+      "description": "anon cannot call get_available_cash",
+      "status": "PASS",
+      "expected": "401/403",
+      "actual": "401 {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"permission denied for function get_available_cash\"}"
+    },
+    {
+      "test_id": "H-TEN-01",
+      "description": "founder A sees only business A",
+      "status": "PASS",
+      "expected": "[bdf4f43c-47d8-4907-8b96-8d6698f46062]",
+      "actual": "200 [{\"id\":\"bdf4f43c-47d8-4907-8b96-8d6698f46062\"}]"
+    },
+    {
+      "test_id": "H-TEN-02",
+      "description": "founder A reads no transactions of business B",
+      "status": "PASS",
+      "expected": "[]",
+      "actual": "200 []"
+    },
+    {
+      "test_id": "H-TEN-03",
+      "description": "founder A cannot insert into business B",
+      "status": "PASS",
+      "expected": "403 42501",
+      "actual": "403 {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"new row violates row-level security policy for table \\\"contacts\\\"\"}"
+    },
+    {
+      "test_id": "H-TEN-04",
+      "description": "founder A cannot rename business B",
+      "status": "PASS",
+      "expected": "0 rows",
+      "actual": "200 []"
+    },
+    {
+      "test_id": "H-TEN-05",
+      "description": "user without a workspace reads nothing",
+      "status": "PASS",
+      "expected": "[]",
+      "actual": "200 []"
+    },
+    {
+      "test_id": "H-TEN-06",
+      "description": "founder B reads no documents of business A",
+      "status": "PASS",
+      "expected": "[]",
+      "actual": "200 []"
+    },
+    {
+      "test_id": "H-FIN-01",
+      "description": "founder A records an expense",
+      "status": "PASS",
+      "expected": "201",
+      "actual": "201 [{\"id\":\"c5288d26-7a88-4ede-8f59-f374914e1ef7\",\"business_id\":\"bdf4f43c-47d8-4907-8b96-8d6698f46062\",\"account_id\":\"6f13e512-276c-43ca-8a77-796"
+    },
+    {
+      "test_id": "H-COL-01",
+      "description": "transaction amount cannot be edited",
+      "status": "PASS",
+      "expected": "42501",
+      "actual": "403 {\"code\":\"42501\",\"details\":null,\"hint\":\"Grant the required privileges to the current role with: GRANT UPDATE ON public.transactions TO authen"
+    },
+    {
+      "test_id": "H-COL-02",
+      "description": "is_reversed cannot be set directly (only by the RPC)",
+      "status": "PASS",
+      "expected": "42501",
+      "actual": "403 {\"code\":\"42501\",\"details\":null,\"hint\":\"Grant the required privileges to the current role with: GRANT UPDATE ON public.transactions TO authen"
+    },
+    {
+      "test_id": "H-COL-03",
+      "description": "base currency cannot be changed",
+      "status": "PASS",
+      "expected": "42501",
+      "actual": "403 {\"code\":\"42501\",\"details\":null,\"hint\":\"Grant the required privileges to the current role with: GRANT UPDATE ON public.businesses TO authenti"
+    },
+    {
+      "test_id": "H-COL-04",
+      "description": "vault_secret_id is not readable",
+      "status": "PASS",
+      "expected": "42501",
+      "actual": "403 {\"code\":\"42501\",\"details\":null,\"hint\":\"Grant the required privileges to the current role with: GRANT SELECT ON public.integration_connection"
+    },
+    {
+      "test_id": "H-COL-05",
+      "description": "a transaction cannot be inserted already reversed",
+      "status": "PASS",
+      "expected": "42501",
+      "actual": "403 {\"code\":\"42501\",\"details\":null,\"hint\":\"Grant the required privileges to the current role with: GRANT INSERT ON public.transactions TO authen"
+    },
+    {
+      "test_id": "H-DEL-01",
+      "description": "transactions cannot be deleted",
+      "status": "PASS",
+      "expected": "42501",
+      "actual": "403 {\"code\":\"42501\",\"details\":null,\"hint\":\"Grant the required privileges to the current role with: GRANT DELETE ON public.transactions TO authen"
+    },
+    {
+      "test_id": "H-ACT-01",
+      "description": "clients cannot write activity records",
+      "status": "PASS",
+      "expected": "42501",
+      "actual": "403 {\"code\":\"42501\",\"details\":null,\"hint\":\"Grant the required privileges to the current role with: GRANT INSERT ON public.activity_records TO au"
+    },
+    {
+      "test_id": "H-DEL-02",
+      "description": "activity records cannot be deleted",
+      "status": "PASS",
+      "expected": "42501",
+      "actual": "403 {\"code\":\"42501\",\"details\":null,\"hint\":\"Grant the required privileges to the current role with: GRANT DELETE ON public.activity_records TO au"
+    },
+    {
+      "test_id": "H-FIN-02",
+      "description": "reversal through the RPC succeeds",
+      "status": "PASS",
+      "expected": "200/204",
+      "actual": "200 {\"status\":\"reversed\",\"transaction_id\":\"c5288d26-7a88-4ede-8f59-f374914e1ef7\"}"
+    },
+    {
+      "test_id": "H-FIN-03",
+      "description": "the transaction now reads as reversed",
+      "status": "PASS",
+      "expected": "true",
+      "actual": "200 [{\"is_reversed\":true}]"
+    },
+    {
+      "test_id": "H-ACT-02",
+      "description": "the reversal left a server-written activity record",
+      "status": "PASS",
+      "expected": ">= 1 row",
+      "actual": "200 [{\"event_type\":\"transactions.reversed\"},{\"event_type\":\"transactions.insert\"}]"
+    },
+    {
+      "test_id": "H-FIN-04",
+      "description": "a reversed transaction cannot be reversed again",
+      "status": "PASS",
+      "expected": "4xx",
+      "actual": "400 {\"code\":\"23514\",\"details\":null,\"hint\":null,\"message\":\"transaction c5288d26-7a88-4ede-8f59-f374914e1ef7 is already reversed\"}"
+    },
+    {
+      "test_id": "H-FIN-05",
+      "description": "derived commitment status cannot be written",
+      "status": "PASS",
+      "expected": "4xx",
+      "actual": "500 {\"code\":\"55000\",\"details\":\"Views that do not select from a single table or view are not automatically updatable.\",\"hint\":\"To enable insertin"
+    },
+    {
+      "test_id": "H-FIN-06",
+      "description": "get_available_cash returns a 2-decimal amount",
+      "status": "PASS",
+      "expected": "n.nn",
+      "actual": "200 143759.00"
+    },
+    {
+      "test_id": "H-FN-01",
+      "description": "founder cannot call the service-only cash function",
+      "status": "PASS",
+      "expected": "401/403/404",
+      "actual": "403 {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"permission denied for function get_available_cash_for_business\"}"
+    },
+    {
+      "test_id": "H-CONC-01",
+      "description": "parallel allocations: exactly one wins in every round",
+      "status": "PASS",
+      "expected": "10/10",
+      "actual": "10/10 201/400/1 201/400/1 201/400/1 201/400/1 201/400/1 201/400/1 201/400/1 201/400/1 400/201/1 400/201/1"
+    },
+    {
+      "test_id": "H-STO-01",
+      "description": "founder A uploads into the business A folder",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200 {\"Key\":\"company-vault/bdf4f43c-47d8-4907-8b96-8d6698f46062/http/20261107230310-da6bd3.bin\",\"Id\":\"e3b2e256-4e33-4189-8d2d-8026e56ad0cc\"}"
+    },
+    {
+      "test_id": "H-STO-02",
+      "description": "download returns identical bytes",
+      "status": "PASS",
+      "expected": "6978d3591c1f",
+      "actual": "200 6978d3591c1f"
+    },
+    {
+      "test_id": "H-STO-03",
+      "description": "founder A cannot upload into business B",
+      "status": "PASS",
+      "expected": "4xx",
+      "actual": "400 {\"statusCode\":\"403\",\"error\":\"Unauthorized\",\"message\":\"new row violates row-level security policy\",\"code\":\"AccessDenied\"}"
+    },
+    {
+      "test_id": "H-STO-04",
+      "description": "founder B cannot download business A objects",
+      "status": "PASS",
+      "expected": "4xx",
+      "actual": "400 {\"statusCode\":\"404\",\"error\":\"not_found\",\"message\":\"Object not found\",\"code\":\"NoSuchKey\"}"
+    },
+    {
+      "test_id": "H-STO-05",
+      "description": "anon cannot download",
+      "status": "PASS",
+      "expected": "4xx",
+      "actual": "400 {\"statusCode\":\"404\",\"error\":\"not_found\",\"message\":\"Object not found\",\"code\":\"NoSuchKey\"}"
+    },
+    {
+      "test_id": "H-STO-06",
+      "description": "bucket is not public",
+      "status": "PASS",
+      "expected": "4xx",
+      "actual": "400 {\"statusCode\":\"404\",\"error\":\"Bucket not found\",\"message\":\"Bucket not found\",\"code\":\"NoSuchBucket\"}"
+    },
+    {
+      "test_id": "H-STO-07",
+      "description": "founder cannot overwrite an object (no UPDATE policy)",
+      "status": "PASS",
+      "expected": "4xx + size 4096",
+      "actual": "400 size 4096"
+    },
+    {
+      "test_id": "H-STO-08",
+      "description": "founder cannot delete through the Storage API",
+      "status": "PASS",
+      "expected": "4xx + still listed",
+      "actual": "delete 400, then listed true"
+    },
+    {
+      "test_id": "H-STO-09",
+      "description": "founder B cannot list business A folder",
+      "status": "PASS",
+      "expected": "[] or 4xx",
+      "actual": "200 []"
+    },
+    {
+      "test_id": "H-SR-01",
+      "description": "service role reads across businesses (bypasses RLS)",
+      "status": "PASS",
+      "expected": ">= 2",
+      "actual": "200 [{\"id\":\"cf227ecc-5c38-456c-a5f7-394ccc340b00\"},{\"id\":\"bdf4f43c-47d8-4907-8b96-8d6698f46062\"}]"
+    },
+    {
+      "test_id": "H-SR-02",
+      "description": "service role cannot delete transactions",
+      "status": "PASS",
+      "expected": "4xx",
+      "actual": "403 {\"code\":\"42501\",\"details\":null,\"hint\":\"Grant the required privileges to the current role with: GRANT DELETE ON public.transactions TO servic"
+    },
+    {
+      "test_id": "H-SR-03",
+      "description": "service role cannot alter a transaction amount",
+      "status": "PASS",
+      "expected": "4xx",
+      "actual": "400 {\"code\":\"23514\",\"details\":null,\"hint\":null,\"message\":\"financial fields of transaction c5288d26-7a88-4ede-8f59-f374914e1ef7 are immutable; re"
+    },
+    {
+      "test_id": "H-SR-04",
+      "description": "service role cannot delete activity records",
+      "status": "PASS",
+      "expected": "4xx",
+      "actual": "403 {\"code\":\"42501\",\"details\":null,\"hint\":\"Grant the required privileges to the current role with: GRANT DELETE ON public.activity_records TO se"
+    },
+    {
+      "test_id": "H-SR-05",
+      "description": "service role can compute cash for a named business",
+      "status": "PASS",
+      "expected": "n.nn",
+      "actual": "200 193759.00"
+    },
+    {
+      "test_id": "H-SR-06",
+      "description": "service role cannot create a workspace without a user",
+      "status": "PASS",
+      "expected": "4xx",
+      "actual": "403 {\"code\":\"42501\",\"details\":null,\"hint\":null,\"message\":\"create_workspace requires a signed-in user\"}"
+    },
+    {
+      "test_id": "H-SR-07",
+      "description": "server-side deletion through the Storage API works",
+      "status": "PASS",
+      "expected": "200 then not listed",
+      "actual": "200 then listed false"
+    },
+    {
+      "test_id": "H-STO-CDN",
+      "description": "founder A GET after server deletion (edge cache behaviour)",
+      "status": "INFO",
+      "expected": null,
+      "actual": "200 cf-cache-status HIT cache-control no-cache"
+    }
+  ]
+}

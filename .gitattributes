@@ -1,0 +1,4 @@
+# Keep LF everywhere so migration checksums match the database migration history on every OS.
+* text=auto eol=lf
+*.png binary
+*.pdf binary
