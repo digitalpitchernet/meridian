@@ -1,0 +1,4 @@
+{
+  "_format": "R-01a stops if the GoTrue or Storage migration level differs between source and target, even when every table definition is identical, unless an entry here matches BOTH version pairs exactly. Add an entry only after review: { \"source\": { \"auth\": \"...\", \"storage\": \"...\" }, \"target\": { \"auth\": \"...\", \"storage\": \"...\" }, \"reason\": \"what changed between the versions and why it does not affect the restore\", \"reviewed_by\": \"name\", \"reviewed_on\": \"YYYY-MM-DD\" }. Commit the change so it appears in the evidence trail.",
+  "accepted": []
+}

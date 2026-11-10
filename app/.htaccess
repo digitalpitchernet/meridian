@@ -1,0 +1,8 @@
+# The repository root denies Apache access; only the application folder is served.
+Require all granted
+DirectoryIndex index.html
+Options -Indexes
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set Referrer-Policy "no-referrer"
+</IfModule>

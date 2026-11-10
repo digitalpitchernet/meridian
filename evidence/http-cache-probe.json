@@ -1,0 +1,52 @@
+{
+  "suite": "http-cache-probe",
+  "run": "20261107230330-1e53a0",
+  "project": "https://xwopffsacsctvjjwnxnw.supabase.co",
+  "ran_at": "2026-11-07T23:03:34.827Z",
+  "probe": [
+    {
+      "label": "none",
+      "sent": null,
+      "upload": 200,
+      "stored": "no-cache",
+      "get1": "200 cc=private, no-cache cf=MISS",
+      "get2": "200 cc=private, no-cache cf=HIT",
+      "delete": 200,
+      "listed_after_delete": false,
+      "get_after_delete": "200 cc=private, no-cache cf=HIT"
+    },
+    {
+      "label": "no-store",
+      "sent": "no-store",
+      "upload": 200,
+      "stored": "no-store",
+      "get1": "200 cc=private, no-store cf=MISS",
+      "get2": "200 cc=private, no-store cf=HIT",
+      "delete": 200,
+      "listed_after_delete": false,
+      "get_after_delete": "200 cc=private, no-store cf=HIT"
+    },
+    {
+      "label": "private-no-store",
+      "sent": "private, no-store",
+      "upload": 200,
+      "stored": "private, no-store",
+      "get1": "200 cc=private, no-store cf=MISS",
+      "get2": "200 cc=private, no-store cf=HIT",
+      "delete": 200,
+      "listed_after_delete": false,
+      "get_after_delete": "200 cc=private, no-store cf=HIT"
+    },
+    {
+      "label": "max-age-3600",
+      "sent": "max-age=3600",
+      "upload": 200,
+      "stored": "max-age=3600",
+      "get1": "200 cc=private, max-age=3596, must-revalidate cf=MISS",
+      "get2": "200 cc=private, max-age=3596, must-revalidate cf=HIT",
+      "delete": 200,
+      "listed_after_delete": false,
+      "get_after_delete": "200 cc=private, max-age=3596, must-revalidate cf=HIT"
+    }
+  ]
+}
