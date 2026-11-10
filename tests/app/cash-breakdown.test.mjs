@@ -114,3 +114,23 @@ test('cashBreakdown: Case 7 - headline cash amount that does not reconcile with 
   assert.equal(r.counted[0].share, null);
   assert.equal(r.counted[1].share, null);
 });
+test('cashBreakdown: Case 8 - negative counted account AND headline cash discrepancy', () => {
+  // Operating is 1000.00, Overdrawn line is -300.00 -> Counted sum is 700.00.
+  // But headline cash reports 900.00 (e.g. stale cache or upstream discrepancy of +200.00).
+  const balances = [
+    { name: 'Operating Bank', balance: '1000.00', counts_as_available_cash: true },
+    { name: 'Credit Facility', balance: '-300.00', counts_as_available_cash: true },
+  ];
+  const r = cashBreakdown(balances, '900.00');
+  assert.equal(r.hasNegative, true);
+  assert.equal(r.grossPositiveCents, 100000);
+  assert.equal(r.grossNegativeCents, -30000);
+  assert.equal(r.countedSumCents, 70000);
+  assert.equal(r.netCents, 90000);
+  assert.equal(r.isReconciled, false);
+  assert.equal(r.discrepancyCents, 20000);
+  // Shares must be suppressed
+  assert.equal(r.sharesMeaningful, false);
+  assert.equal(r.counted[0].share, null);
+  assert.equal(r.counted[1].share, null);
+});

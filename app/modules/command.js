@@ -94,8 +94,9 @@ function cashHero(ctx, f, dev) {
     })),
 
     // Explicit arithmetic reconciliation bar:
-    // If overdrafts exist, clarifies subtraction: Gross positive − Overdrawn = Net
-    hasNegative && h('div', { class: 'pulse-recon' },
+    // Rendered only when isReconciled is true. If overdrafts exist, clarifies subtraction: Gross positive − Overdrawn = Net.
+    // When isReconciled is false, this equation is omitted so headline cash is never falsely presented as equaling the counted sum.
+    hasNegative && isReconciled && h('div', { class: 'pulse-recon' },
       h('span', { class: 'pulse-recon-item' }, 'Gross positive: ', h('strong', { class: 'num' }, fmt(ctx, posStr))),
       h('span', { class: 'pulse-recon-item' }, ' − Overdrawn: ', h('strong', { class: 'num fg-bad' }, fmt(ctx, absNegStr))),
       h('span', { class: 'pulse-recon-item' }, ' = Net: ', h('strong', { class: 'num' }, fmt(ctx, f.cash)))),
