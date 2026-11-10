@@ -7,7 +7,7 @@ import { icon } from '../ui/icons.js';
 import { button, stateBlock } from '../ui/components.js';
 import { TASK_STATUS, MILESTONE_STATUS, statusIcon, priorityIcon } from '../ui/status.js';
 import { formatShortDate, relativeDay, formatTime, timeAgo, addDays, daysBetween, formatCount } from '../core/format.js';
-import { kpis, attention, activeProjects, schedule, describeActivity } from './projections.js';
+import { kpis, attention, activeProjects, schedule, describeActivity, cashBreakdown } from './projections.js';
 import { statusButton, dueLabel, openTaskPanel } from './tasks.js';
 import { financeSnapshot } from './reporting.js';
 import { fmt, bar } from './finance-ui.js';
@@ -60,23 +60,53 @@ function kpiStrip(ctx, d) {
     h('p', { class: 'pulse-note' }, 'Burn and runway · not calculated — no approved calculation yet'));
 }
 
-// Available cash with its make-up by counted account. The shares are presentation only (founder-approved, Nov 2026):
-// each positive counted balance over the sum of positive counted balances; the cash figure itself comes from financeSnapshot.
+// Available cash with its make-up by counted account.
+// Every counted account is shown. If any counted account is negative, percentages and the
+// proportional meter are suppressed to avoid misleading shares, and an explicit reconciliation is shown.
 function cashHero(ctx, f, dev) {
-  const counted = f.balances.filter(b => b.counts_as_available_cash);
-  const parts = counted.filter(b => toCents(b.balance) > 0); // shortcut: a negative counted balance is left out of the bar, not netted
-  const total = parts.reduce((sum, b) => sum + toCents(b.balance), 0);
-  const share = b => total ? `${(toCents(b.balance) / total * 100).toFixed(1)}%` : '—';
-  const notCounted = f.balances.filter(b => !b.counts_as_available_cash);
+  const data = cashBreakdown(f.balances, f.cash);
+  const { counted, notCounted, hasNegative, sharesMeaningful, isReconciled, discrepancyCents } = data;
+  const meterParts = counted.filter(b => b.cents > 0);
+  const posStr = (data.grossPositiveCents / 100).toFixed(2);
+  const absNegStr = (Math.abs(data.grossNegativeCents) / 100).toFixed(2);
+
   return h('div', { class: 'pulse-cash' },
     h('span', { class: 'pulse-label' }, 'Available cash'),
-    h('span', { class: 'pulse-cash-value num' }, fmt(ctx, f.cash)),
+    h('span', { class: ['pulse-cash-value num', data.netCents < 0 && 'fg-bad'] }, fmt(ctx, f.cash)),
     h('span', { class: 'pulse-sub' }, `${dev ? 'fictional · today' : 'today'} · ${counted.length} bank and cash account${counted.length === 1 ? '' : 's'} counted`),
-    parts.length > 0 && h('div', { class: 'meter pulse-meter', role: 'img', aria: { label: `Available cash by account: ${parts.map(b => `${b.name} ${share(b)}`).join(', ')}` } },
-      parts.map((b, i) => h('span', { class: `pm-${i % 4}`, style: { '--grow': String(toCents(b.balance)) } }))),
-    parts.length > 0 && h('ul', { class: 'pulse-legend' }, parts.map((b, i) => h('li', null,
-      h('span', { class: 'pulse-legend-name' }, h('span', { class: `legend-dot pm-${i % 4}`, aria: { hidden: 'true' } }), h('span', { class: 'ellipsis' }, b.name)),
-      h('span', { class: 'num pulse-legend-amt' }, fmt(ctx, b.balance)), h('span', { class: 'num pulse-legend-share' }, share(b))))),
+
+    // Visual meter: shown only when shares are mathematically meaningful (reconciled and all non-negative)
+    sharesMeaningful && meterParts.length > 0 && h('div', {
+      class: 'meter pulse-meter', role: 'img',
+      aria: { label: `Available cash by account: ${meterParts.map(b => `${b.name} ${b.share}`).join(', ')}` },
+    }, meterParts.map((b, i) => h('span', { class: `pm-${i % 4}`, style: { '--grow': String(b.cents) } }))),
+
+    // Reconciled legend: includes all counted accounts (positive, zero, and negative)
+    counted.length > 0 && h('ul', { class: 'pulse-legend' }, counted.map((b, i) => {
+      const isNeg = b.cents < 0;
+      return h('li', { class: isNeg ? 'is-neg' : null },
+        h('span', { class: 'pulse-legend-name' },
+          sharesMeaningful ? h('span', { class: `legend-dot pm-${i % 4}`, aria: { hidden: 'true' } }) : null,
+          h('span', { class: 'ellipsis' }, b.name)),
+        h('span', { class: ['num pulse-legend-amt', isNeg && 'fg-bad'] }, fmt(ctx, b.balance)),
+        b.share ? h('span', { class: 'num pulse-legend-share' }, b.share)
+          : isNeg ? h('span', { class: 'num pulse-legend-share fg-bad' }, 'overdrawn') : null);
+    })),
+
+    // Explicit arithmetic reconciliation bar:
+    // If overdrafts exist, clarifies subtraction: Gross positive − Overdrawn = Net
+    hasNegative && h('div', { class: 'pulse-recon' },
+      h('span', { class: 'pulse-recon-item' }, 'Gross positive: ', h('strong', { class: 'num' }, fmt(ctx, posStr))),
+      h('span', { class: 'pulse-recon-item' }, ' − Overdrawn: ', h('strong', { class: 'num fg-bad' }, fmt(ctx, absNegStr))),
+      h('span', { class: 'pulse-recon-item' }, ' = Net: ', h('strong', { class: 'num' }, fmt(ctx, f.cash)))),
+
+    // If headline cash diverges from the sum of counted balances (upstream calculation discrepancy),
+    // flag the inconsistency explicitly rather than silently displaying mismatched numbers.
+    !isReconciled && h('div', { class: 'pulse-recon pulse-recon-warn' },
+      h('span', { class: 'fg-warn' }, 'Reconciliation notice: counted accounts sum to '),
+      h('strong', { class: 'num' }, fmt(ctx, (data.countedSumCents / 100).toFixed(2))),
+      h('span', { class: 'faint' }, ` (difference ${fmt(ctx, (discrepancyCents / 100).toFixed(2))})`)),
+
     notCounted.length > 0 && h('p', { class: 'pulse-sub' }, `Not counted: ${notCounted.map(b => `${b.name} ${fmt(ctx, b.balance)}`).join(' · ')}`));
 }
 

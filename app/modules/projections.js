@@ -1,6 +1,7 @@
 // Pure projections over module data. The Command Centre is a projection of canonical module rows and stores
 // nothing of its own (product brief); these functions are that projection, unit-tested in tests/app.
 import { addDays, daysBetween, todayIn } from '../core/format.js';
+import { toCents } from '../data/money.js';
 
 const PRIORITY_RANK = { Critical: 0, High: 1, Normal: 2, Low: 3 };
 export const isOpen = t => t.status !== 'Done';
@@ -140,4 +141,42 @@ export function reviewState(d, today) {
 export function decisionMatches(d, q) {
   const hay = [d.title, d.context, d.problem, d.rationale].filter(Boolean).join(' ').toLowerCase();
   return String(q).toLowerCase().split(/\s+/).filter(Boolean).every(w => hay.includes(w));
+}
+
+
+// ---------------- Cash Breakdown Projection ----------------
+// Mathematical reconciliation of counted vs uncounted accounts for the Command Centre.
+// Net available cash remains authoritative. Negative balances are explicitly isolated so
+// positive shares are never distorted or mathematically contradictory.
+// If headline cash does not match the sum of counted balances (reconciliation discrepancy),
+// isReconciled will be false and the difference recorded.
+export function cashBreakdown(balances, headlineCash = null) {
+  const counted = balances.filter(b => b.counts_as_available_cash);
+  const notCounted = balances.filter(b => !b.counts_as_available_cash);
+  const posCents = counted.filter(b => toCents(b.balance) > 0).reduce((s, b) => s + toCents(b.balance), 0);
+  const negCents = counted.filter(b => toCents(b.balance) < 0).reduce((s, b) => s + toCents(b.balance), 0);
+  const countedSumCents = posCents + negCents;
+  const netCents = headlineCash != null ? toCents(headlineCash) : countedSumCents;
+  const isReconciled = headlineCash == null || netCents === countedSumCents;
+  const discrepancyCents = isReconciled ? 0 : (netCents - countedSumCents);
+  const hasNegative = negCents < 0;
+  // Shares are only meaningful if reconciled, zero negative counted balances, and positive funds exist
+  const sharesMeaningful = isReconciled && !hasNegative && posCents > 0;
+  const countedWithShares = counted.map(b => {
+    const c = toCents(b.balance);
+    const share = sharesMeaningful && posCents > 0 ? `${(Math.max(0, c) / posCents * 100).toFixed(1)}%` : null;
+    return { ...b, cents: c, share };
+  });
+  return {
+    counted: countedWithShares,
+    notCounted,
+    grossPositiveCents: posCents,
+    grossNegativeCents: negCents,
+    countedSumCents,
+    netCents,
+    hasNegative,
+    sharesMeaningful,
+    isReconciled,
+    discrepancyCents,
+  };
 }
