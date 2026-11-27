@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 connector/config.php
+app/app-config.json
 
 # local tooling
 node_modules/

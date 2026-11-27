@@ -1,16 +1,20 @@
 // Local dev server for the Meridian app (no dependencies).
-//   node tools/serve.mjs [port]              -> http://127.0.0.1:5180/ (backed by local PostgreSQL 17 + RLS)
-//   node tools/serve.mjs [port] --fixtures   -> http://127.0.0.1:5180/ (fictional browser-only fixtures)
+//   node tools/serve.mjs [port]              -> http://127.0.0.1:5180/ (local PostgreSQL 17 + RLS)
+//   node tools/serve.mjs [port] --supabase   -> http://127.0.0.1:5180/ (uses SUPABASE_URL + SUPABASE_ANON_KEY from .env)
+//   node tools/serve.mjs [port] --fixtures   -> http://127.0.0.1:5180/ (explicit fictional browser-only fixtures)
 // Serves app/ only, on 127.0.0.1 only. Never serves the repository root (.env, docs, tests stay private).
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createLocalSupabase } from './local-supabase.mjs';
 
-const root = resolve(fileURLToPath(new URL('../app/', import.meta.url)));
+const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
+const root = join(repoRoot, 'app');
 const args = process.argv.slice(2);
 const useFixtures = args.includes('--fixtures');
+const useSupabase = args.includes('--supabase');
 const portArg = args.find(a => /^\d+$/.test(a));
 const port = Number(portArg || process.env.PORT || 5180);
 const types = {
@@ -24,7 +28,36 @@ const types = {
   '.ico': 'image/x-icon',
 };
 
-const backend = useFixtures ? null : createLocalSupabase();
+function loadPublicSupabaseConfig() {
+  let url = process.env.SUPABASE_URL;
+  let anonKey = process.env.SUPABASE_ANON_KEY;
+  if (!url || !anonKey) {
+    try {
+      const envText = readFileSync(join(repoRoot, '.env'), 'utf8');
+      for (const line of envText.split(/\r?\n/)) {
+        const m = line.match(/^(SUPABASE_URL|SUPABASE_ANON_KEY)=(.+)$/);
+        if (m) {
+          if (m[1] === 'SUPABASE_URL' && !url) url = m[2].trim();
+          if (m[1] === 'SUPABASE_ANON_KEY' && !anonKey) anonKey = m[2].trim();
+        }
+      }
+    } catch { /* .env optional */ }
+  }
+  if (!url || !anonKey) {
+    console.error('Error: SUPABASE_URL and SUPABASE_ANON_KEY must be set in .env or environment for --supabase mode.');
+    process.exit(1);
+  }
+  // Never read or expose SUPABASE_SERVICE_ROLE_KEY in app-config.json
+  return {
+    supabaseUrl: url,
+    supabaseAnonKey: anonKey,
+    label: 'Supabase · validation',
+    description: 'Connected to Supabase via publishable anon key with GoTrue auth and RLS.',
+  };
+}
+
+const remoteConfig = useSupabase ? loadPublicSupabaseConfig() : null;
+const backend = (useFixtures || useSupabase) ? null : createLocalSupabase();
 if (backend) {
   try {
     backend.initAndStart();
@@ -43,12 +76,13 @@ const server = createServer(async (req, res) => {
     }
     if (path === '/app-config.json') {
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(JSON.stringify(backend ? {
+      const payload = remoteConfig || (backend ? {
         supabaseUrl: `http://127.0.0.1:${port}`,
         supabaseAnonKey: 'local-dev-anon',
         label: 'PostgreSQL · live',
         description: 'Connected to local PostgreSQL 17 with migrations, row-level security, and server-side audit logging.',
-      } : { mode: 'fixtures' }));
+      } : { mode: 'fixtures' });
+      res.end(JSON.stringify(payload));
       return;
     }
     let file = normalize(join(root, path));
@@ -63,7 +97,7 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(port, '127.0.0.1', () => {
-  const mode = backend ? 'PostgreSQL 17 + RLS' : 'fictional browser fixtures';
+  const mode = remoteConfig ? `Supabase (${remoteConfig.supabaseUrl})` : backend ? 'PostgreSQL 17 + RLS' : 'fictional browser fixtures';
   console.log(`Meridian dev server (${mode}): http://127.0.0.1:${port}/  (serving ${root})`);
 });
 

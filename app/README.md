@@ -97,6 +97,7 @@ currency column. Every row carries a data-source column, and development files a
 
 ```bash
 node tools/serve.mjs              # http://127.0.0.1:5180/   (local PostgreSQL 17 + RLS; exits cleanly if PostgreSQL server is unavailable)
+node tools/serve.mjs --supabase   # http://127.0.0.1:5180/   (connects to SUPABASE_URL + SUPABASE_ANON_KEY from .env; never exposes service_role)
 node tools/serve.mjs --fixtures   # http://127.0.0.1:5180/   (explicit fictional browser-only fixtures)
 ```
 
