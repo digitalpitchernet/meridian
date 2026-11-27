@@ -29,6 +29,13 @@ export function createShell(ctx) {
     [['dark', 'moon', 'Dark'], ['light', 'sun', 'Light'], ['system', 'monitor', 'System']].map(([value, ic, label]) =>
       h('button', { type: 'button', class: 'seg-btn', role: 'radio', title: label, aria: { label, checked: ctx.profile.theme === value ? 'true' : 'false' }, dataset: { value }, onclick: () => ctx.setTheme(value) }, icon(ic, { size: 14 }))));
 
+  const isDev = ctx.dataSource.kind === 'development';
+  const badgeNode = isDev
+    ? h('a', { class: 'dev-badge', href: '#/settings', title: ctx.dataSource.description },
+        icon('beaker', { size: 14 }), h('span', null, 'Development data'), h('span', { class: 'dev-badge-sub' }, 'fictional · no backend'))
+    : h('a', { class: 'dev-badge', href: '#/settings', title: ctx.dataSource.description },
+        icon('shield', { size: 14 }), h('span', null, ctx.dataSource.label), h('span', { class: 'dev-badge-sub' }, 'authenticated · persisted'));
+
   const sidebar = h('aside', { class: 'sidebar', id: 'sidebar', aria: { label: 'Main navigation' } },
     h('div', { class: 'brand' },
       h('span', { class: 'brand-mark', aria: { hidden: true } }, 'M'),
@@ -36,17 +43,17 @@ export function createShell(ctx) {
     button('Search or jump to…', { kind: 'search', iconName: 'search', kbd: ctx.isMac ? '⌘K' : 'Ctrl K', onClick: () => ctx.openLauncher(), cls: 'sidebar-search' }),
     h('nav', { class: 'nav' }, navGroups),
     h('div', { class: 'sidebar-foot' },
-      h('a', { class: 'dev-badge', href: '#/settings', title: ctx.dataSource.description },
-        icon('beaker', { size: 14 }), h('span', null, 'Development data'), h('span', { class: 'dev-badge-sub' }, 'fictional · no backend')),
+      badgeNode,
       h('div', { class: 'me' }, avatar(ctx.profile.full_name, { size: 26 }),
         h('div', { class: 'me-text', title: `${ctx.profile.full_name} · ${ctx.profile.role_title || 'Founder'}` }, h('span', { class: 'me-name' }, ctx.profile.full_name), h('span', { class: 'me-role' }, ctx.profile.role_title || 'Founder')),
-        themeSeg)));
+        themeSeg,
+        ctx.signOut && button('', { kind: 'ghost', size: 'sm', iconName: 'logOut', title: 'Sign out', onClick: () => ctx.signOut() }))));
 
   const menuBtn = button('', { kind: 'ghost', iconName: 'menu', title: 'Open navigation', cls: 'menu-btn', onClick: () => setNav(true) });
   const topbar = h('header', { class: 'topbar' },
     menuBtn, crumbs,
     h('div', { class: 'topbar-actions' },
-      h('span', { class: 'dev-pill', title: ctx.dataSource.description }, icon('beaker', { size: 12 }), 'Dev data'),
+      isDev && h('span', { class: 'dev-pill', title: ctx.dataSource.description }, icon('beaker', { size: 12 }), 'Dev data'),
       button('', { kind: 'ghost', iconName: 'search', title: 'Search (Ctrl K)', cls: 'topbar-search', onClick: () => ctx.openLauncher() }),
       button('New', { kind: 'primary', size: 'sm', iconName: 'plus', title: 'Quick create', onClick: () => ctx.quickCreate() })));
 
