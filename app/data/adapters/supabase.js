@@ -3,6 +3,7 @@
 import { DataError } from '../errors.js';
 
 const AUTH_STORAGE_KEY = 'meridian.auth.v1';
+const REFRESH_MARGIN_SEC = 30;
 
 function parseError(status, body, fallbackMessage) {
   const code = body?.code || (status === 401 || status === 403 ? '42501' : status === 404 ? 'P0002' : 'P0001');
@@ -27,16 +28,31 @@ export function createSupabaseAdapter({
   label = 'Supabase · live',
   fetchImpl = globalThis.fetch.bind(globalThis),
   storage = null,
+  now = () => Math.floor(Date.now() / 1000),
 } = {}) {
   const baseUrl = String(url || '').replace(/\/+$/, '');
   const listeners = new Set();
+  const authListeners = new Set();
   let session = null;
   let cachedBusinessId = null;
+  let refreshPromise = null;
 
   const emit = change => {
     for (const fn of listeners) {
       try { fn(change); } catch (e) { console.error(e); }
     }
+  };
+
+  const emitAuth = (event, nextSession) => {
+    for (const fn of authListeners) {
+      try { fn(event, nextSession); } catch (e) { console.error(e); }
+    }
+  };
+
+  const computeExpiresAt = res => {
+    if (typeof res?.expires_at === 'number') return res.expires_at;
+    if (typeof res?.expires_in === 'number' && res.expires_in > 0) return now() + res.expires_in;
+    return null;
   };
 
   const loadStoredSession = () => {
@@ -51,27 +67,88 @@ export function createSupabaseAdapter({
     }
   };
 
-  const saveSession = next => {
+  const saveSession = (next, event = null) => {
+    const prevToken = session?.access_token ?? null;
     session = next;
     cachedBusinessId = null;
-    if (!storage) return;
-    try {
-      if (next) storage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next));
-      else storage.removeItem(AUTH_STORAGE_KEY);
-    } catch { /* ignore storage quota errors */ }
+    if (storage) {
+      try {
+        if (next) storage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next));
+        else storage.removeItem(AUTH_STORAGE_KEY);
+      } catch { /* ignore storage quota errors */ }
+    }
+    if (event) {
+      emitAuth(event, next);
+    } else if (prevToken && !next) {
+      emitAuth('SIGNED_OUT', null);
+    }
   };
 
   session = loadStoredSession();
 
-  async function request(path, { method = 'GET', body, headers = {}, authRequired = true } = {}) {
+  function isExpiringSoon() {
+    if (!session?.expires_at) return false;
+    return session.expires_at - now() <= REFRESH_MARGIN_SEC;
+  }
+
+  async function refreshSession() {
+    if (refreshPromise) return refreshPromise;
+    const rt = session?.refresh_token;
+    if (!rt) {
+      saveSession(null, 'SIGNED_OUT');
+      throw new DataError('42501', 'Session expired. Please sign in again.');
+    }
+
+    refreshPromise = (async () => {
+      try {
+        const res = await fetchImpl(`${baseUrl}/auth/v1/token?grant_type=refresh_token`, {
+          method: 'POST',
+          headers: { apikey: anonKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: rt }),
+        });
+        const text = await res.text();
+        let json = null;
+        if (text) {
+          try { json = JSON.parse(text); } catch { json = { message: text }; }
+        }
+        if (!res.ok || !json?.access_token) {
+          saveSession(null, 'SIGNED_OUT');
+          throw new DataError('42501', json?.error_description || json?.message || 'Session expired. Please sign in again.');
+        }
+        const next = {
+          access_token: json.access_token,
+          refresh_token: json.refresh_token || rt,
+          expires_at: computeExpiresAt(json),
+          user: json.user || session?.user || null,
+        };
+        saveSession(next, 'TOKEN_REFRESHED');
+        return next;
+      } catch (err) {
+        if (err instanceof DataError) throw err;
+        saveSession(null, 'SIGNED_OUT');
+        throw new DataError('42501', 'Session expired. Please sign in again.');
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+
+    return refreshPromise;
+  }
+
+  async function request(path, { method = 'GET', body, headers = {}, authRequired = true, _retried = false } = {}) {
+    if (authRequired && !session?.access_token) {
+      throw new DataError('42501', 'Authentication required');
+    }
+    if (authRequired && isExpiringSoon() && session?.refresh_token) {
+      await refreshSession();
+    }
+
     const reqHeaders = {
       apikey: anonKey,
       ...headers,
     };
-    if (session?.access_token) {
+    if (authRequired && session?.access_token) {
       reqHeaders.Authorization = `Bearer ${session.access_token}`;
-    } else if (authRequired) {
-      throw new DataError('42501', 'Authentication required');
     }
     if (body !== undefined) {
       reqHeaders['Content-Type'] = 'application/json';
@@ -87,8 +164,13 @@ export function createSupabaseAdapter({
       try { json = JSON.parse(text); } catch { json = { message: text }; }
     }
     if (!res.ok) {
-      if (res.status === 401 && session) {
-        saveSession(null);
+      if (res.status === 401 && authRequired) {
+        if (!_retried && session?.refresh_token) {
+          await refreshSession();
+          return request(path, { method, body, headers, authRequired, _retried: true });
+        }
+        if (session) saveSession(null, 'SIGNED_OUT');
+        throw new DataError('42501', json?.message || json?.error_description || 'Session expired. Please sign in again.', { status: 401 });
       }
       throw parseError(res.status, json, res.statusText);
     }
@@ -200,16 +282,21 @@ export function createSupabaseAdapter({
   }
 
   const auth = {
+    onStateChange(fn) {
+      authListeners.add(fn);
+      return () => authListeners.delete(fn);
+    },
+    refreshSession,
     async getSession() {
       if (!session?.access_token) return null;
       try {
         const user = await request('/auth/v1/user', { method: 'GET' });
-        session = { ...session, user };
-        saveSession(session);
-        return session;
+        const next = { ...session, user };
+        saveSession(next);
+        return next;
       } catch (e) {
         if (e.code === '42501') {
-          saveSession(null);
+          saveSession(null, 'SIGNED_OUT');
           return null;
         }
         throw e;
@@ -222,7 +309,12 @@ export function createSupabaseAdapter({
         authRequired: false,
       });
       if (!res?.access_token) throw new DataError('42501', 'Invalid login response');
-      saveSession({ access_token: res.access_token, refresh_token: res.refresh_token || null, user: res.user || null });
+      saveSession({
+        access_token: res.access_token,
+        refresh_token: res.refresh_token || null,
+        expires_at: computeExpiresAt(res),
+        user: res.user || null,
+      }, 'SIGNED_IN');
       return session;
     },
     async signUp(email, password) {
@@ -232,7 +324,12 @@ export function createSupabaseAdapter({
         authRequired: false,
       });
       if (res?.access_token) {
-        saveSession({ access_token: res.access_token, refresh_token: res.refresh_token || null, user: res.user || null });
+        saveSession({
+          access_token: res.access_token,
+          refresh_token: res.refresh_token || null,
+          expires_at: computeExpiresAt(res),
+          user: res.user || null,
+        }, 'SIGNED_IN');
       }
       return { session, user: res?.user || null };
     },
@@ -240,7 +337,7 @@ export function createSupabaseAdapter({
       if (session?.access_token) {
         await request('/auth/v1/logout', { method: 'POST' }).catch(() => {});
       }
-      saveSession(null);
+      saveSession(null, 'SIGNED_OUT');
     },
   };
 

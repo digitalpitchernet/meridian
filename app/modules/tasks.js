@@ -153,7 +153,7 @@ export async function openTaskPanel(ctx, taskId) {
       title,
       h('div', { class: 'prop-grid' },
         field('Status', statusSel), field('Priority', prioSel), field('Due date', due),
-        field('Assignee', assigneeSel), field('Project', projSel), field('Milestone', msSel),
+        field('Assignee', assigneeSel, { hint: 'Workspace participant record (single-user V1; not a separate login).' }), field('Project', projSel), field('Milestone', msSel),
         field('Repeats', ruleSel, { hint: task.recurrence_rule ? `Every ${task.recurrence_interval} ${{ daily: 'day', weekly: 'week', monthly: 'month', quarterly: 'quarter', annually: 'year' }[task.recurrence_rule]}${task.recurrence_interval > 1 ? 's' : ''}. Creating the next occurrence is a later server feature.` : null })),
       field('Description', desc, { full: true }),
       h('section', { class: 'panel-section' }, h('h3', { class: 'section-title' }, `Subtasks${subtasks.length ? ` · ${subtasks.filter(s => s.is_completed).length}/${subtasks.length}` : ''}`), subList, addSub),

@@ -26,7 +26,12 @@ const types = {
 
 const backend = useFixtures ? null : createLocalSupabase();
 if (backend) {
-  backend.initAndStart();
+  try {
+    backend.initAndStart();
+  } catch (err) {
+    console.error(`Error starting local PostgreSQL backend: ${err.message}`);
+    process.exit(1);
+  }
 }
 
 const server = createServer(async (req, res) => {
@@ -36,14 +41,14 @@ const server = createServer(async (req, res) => {
       await backend.handleRequest(req, res);
       return;
     }
-    if (backend && path === '/app-config.json') {
+    if (path === '/app-config.json') {
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(JSON.stringify({
+      res.end(JSON.stringify(backend ? {
         supabaseUrl: `http://127.0.0.1:${port}`,
         supabaseAnonKey: 'local-dev-anon',
         label: 'PostgreSQL · live',
         description: 'Connected to local PostgreSQL 17 with migrations, row-level security, and server-side audit logging.',
-      }));
+      } : { mode: 'fixtures' }));
       return;
     }
     let file = normalize(join(root, path));

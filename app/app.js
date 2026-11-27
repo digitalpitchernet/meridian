@@ -153,6 +153,9 @@ async function boot() {
       renderWorkspaceSetup(adapter, session, () => boot());
       return;
     }
+    adapter.auth.onStateChange(event => {
+      if (event === 'SIGNED_OUT') renderAuthGate(adapter, dataSource, () => boot());
+    });
     await startApp({ data, dataSource, adapter, business, profile });
     return;
   }

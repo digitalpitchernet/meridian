@@ -95,14 +95,17 @@ currency column. Every row carries a data-source column, and development files a
 ## Run it
 
 ```bash
-node tools/serve.mjs          # http://127.0.0.1:5180/   (serves app/ only, on 127.0.0.1 only)
+node tools/serve.mjs              # http://127.0.0.1:5180/   (local PostgreSQL 17 + RLS; exits cleanly if PostgreSQL server is unavailable)
+node tools/serve.mjs --fixtures   # http://127.0.0.1:5180/   (explicit fictional browser-only fixtures)
 ```
+
+For a live Supabase project, provide `app/app-config.json` with `{ "supabaseUrl": "...", "supabaseAnonKey": "..." }`. Missing or unreachable `app/app-config.json` fails closed and never silently falls back to fictional fixtures (use `?mode=dev` or `--fixtures` explicitly).
 
 With XAMPP's Apache running it is also at `http://localhost/meridian/app/`. `app/.htaccess` allows this folder;
 the repository root stays denied.
 
 ```bash
-node --test "tests/app/*.test.mjs"   # 75 tests: core, data adapter, projections, M2, finance (incl. SQL parity), vault, reports, participants
+node --test "tests/app/*.test.mjs"   # app unit, parity, and integration tests
 ```
 
 ## Data: development fixtures, no backend
@@ -184,6 +187,7 @@ No schema change was needed.
 ## Known limits
 
 - Repeating tasks store their rule. Creating the next occurrence is server work for later (Edge Function).
+- Task assignment (`assigned_to_participant_id`) targets a workspace `participants` record (business record), not an authenticated team-member login. Multi-user team execution and per-assignee permissions remain out of scope for V1.
 - The activity actor is always the signed-in founder (single-user V1).
 - The launcher searches modules, actions, projects and tasks, not milestones, contacts or decisions (those modules have their own search).
 - Contact interactions (`contact_interactions`) exist in the schema but are not surfaced: Contacts is deliberately a directory, not a CRM.

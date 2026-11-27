@@ -111,7 +111,9 @@ BEGIN
                 'completed_at', NEW.completed_at
             ))
         );
-    ELSIF OLD.assigned_to_participant_id IS DISTINCT FROM NEW.assigned_to_participant_id THEN
+    END IF;
+
+    IF OLD.assigned_to_participant_id IS DISTINCT FROM NEW.assigned_to_participant_id THEN
         IF NEW.assigned_to_participant_id IS NOT NULL THEN
             SELECT p.full_name INTO v_assignee_name
             FROM public.participants p
@@ -123,7 +125,7 @@ BEGIN
             'tasks',
             NEW.id,
             CASE WHEN NEW.assigned_to_participant_id IS NOT NULL
-                THEN 'Task assigned to ' || COALESCE(v_assignee_name, 'member') || ': ' || NEW.title
+                THEN 'Task assigned to ' || COALESCE(v_assignee_name, 'participant') || ': ' || NEW.title
                 ELSE 'Task unassigned: ' || NEW.title
             END,
             jsonb_strip_nulls(jsonb_build_object(
@@ -133,7 +135,10 @@ BEGIN
                 'status', NEW.status
             ))
         );
-    ELSE
+    END IF;
+
+    IF OLD.status IS NOT DISTINCT FROM NEW.status
+       AND OLD.assigned_to_participant_id IS NOT DISTINCT FROM NEW.assigned_to_participant_id THEN
         PERFORM public.log_activity(
             NEW.business_id,
             'tasks.update',

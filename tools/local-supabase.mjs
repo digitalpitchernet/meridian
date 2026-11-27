@@ -26,6 +26,17 @@ function exe(binDir, name) {
   return binDir ? join(binDir, `${name}${suffix}`) : name;
 }
 
+export function hasLocalPgServer() {
+  const binDir = findPgBin();
+  const pgConfigExe = exe(binDir, 'pg_config');
+  try {
+    const shareDir = execFileSync(pgConfigExe, ['--sharedir'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    return Boolean(shareDir && existsSync(join(shareDir, 'postgres.bki')));
+  } catch {
+    return false;
+  }
+}
+
 const IDENT_RE = /^[a-z_][a-z0-9_]*$/;
 function assertIdent(name, label = 'identifier') {
   if (!IDENT_RE.test(name)) throw Object.assign(new Error(`Invalid ${label}: ${name}`), { status: 400, code: '42703' });
@@ -153,6 +164,13 @@ export function createLocalSupabase({
   }
 
   function initAndStart() {
+    if (!hasLocalPgServer()) {
+      throw new Error(
+        'Local PostgreSQL server is not available (missing share/postgres.bki). ' +
+        'Run "node tools/serve.mjs --fixtures" for explicit fictional fixture mode, ' +
+        'or configure app/app-config.json for a live Supabase project.'
+      );
+    }
     mkdirSync(join(dataDir, '..'), { recursive: true });
     const isFresh = !existsSync(join(dataDir, 'PG_VERSION'));
     if (isFresh) {
@@ -238,9 +256,11 @@ export function createLocalSupabase({
   }
 
   function issueSession(user) {
-    const exp = Math.floor(Date.now() / 1000) + 60 * 60 * 12;
+    const nowSec = Math.floor(Date.now() / 1000);
+    const exp = nowSec + 60 * 60 * 12;
     const access_token = signJwt({ sub: user.id, role: 'authenticated', email: user.email, exp }, jwtSecret);
-    return { access_token, token_type: 'bearer', expires_in: 43200, user: { id: user.id, email: user.email } };
+    const refresh_token = signJwt({ sub: user.id, kind: 'refresh', email: user.email, exp: nowSec + 60 * 60 * 24 * 7 }, jwtSecret);
+    return { access_token, refresh_token, token_type: 'bearer', expires_in: 43200, expires_at: exp, user: { id: user.id, email: user.email } };
   }
 
   async function handleRequest(req, res) {
@@ -266,7 +286,18 @@ export function createLocalSupabase({
       }
 
       if (path === '/auth/v1/token' && req.method === 'POST') {
+        const grantType = url.searchParams.get('grant_type') || 'password';
         const body = await readJsonBody(req);
+        if (grantType === 'refresh_token') {
+          const claims = verifyJwt(body?.refresh_token, jwtSecret);
+          if (!claims?.sub || claims.kind !== 'refresh') {
+            return sendJson(res, 401, { error_description: 'Invalid or expired refresh token' });
+          }
+          const row = runPsql(pgUrl, `SELECT id, email FROM auth.users WHERE id = ${sqlLit(claims.sub)} LIMIT 1;`).trim();
+          if (!row) return sendJson(res, 401, { error_description: 'User not found' });
+          const [id, userEmail] = row.split('|');
+          return sendJson(res, 200, issueSession({ id, email: userEmail }));
+        }
         const email = String(body?.email || '').trim().toLowerCase();
         const password = String(body?.password || '');
         const row = runPsql(pgUrl, `
