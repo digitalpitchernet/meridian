@@ -1,15 +1,16 @@
-# Meridian app (M1 to M4.3)
+# Meridian app (M1 to M4.3 + Task Execution live slice)
 
 The Meridian application: vanilla HTML, CSS and JavaScript with native ES modules. No framework, no build step,
-no dependencies, no external requests.
+no third-party dependencies.
 
 **Built:**
 - M1: Command Centre, Projects, Tasks, the application shell and the Ctrl/Cmd+K launcher.
 - M2: Calendar, Milestones, Contacts and Decisions.
 - M3: Finances (accounts and cash, append-only transactions, funding, capital, CSV import).
 - M4.1: Settings. M4.2: Company Vault (metadata only, no file storage). M4.3: Reports, and the Command Centre finance panels.
+- Task Execution live slice (`feat/task-execution-slice`): Supabase/PostgreSQL adapter with GoTrue auth, workspace onboarding, participant assignment, status transitions, and task accountability history.
 
-Every module in the navigation is built. Everything runs on fictional development data; no backend is connected.
+Live backend mode requires an explicit `app/app-config.json` (or local PostgreSQL via `node tools/serve.mjs`). Missing or unreachable backend configuration fails closed; fictional fixture mode is opt-in only (`--fixtures` or `?mode=dev`).
 
 ## M2: schema gaps and app-level rules (flagged for review)
 
@@ -108,14 +109,21 @@ the repository root stays denied.
 node --test "tests/app/*.test.mjs"   # app unit, parity, and integration tests
 ```
 
-## Data: development fixtures, no backend
+## Data: live backend vs. explicit fixture mode
 
-- **No backend is connected.** There is no Supabase client and no network call. The shell always shows a
-  "Development data · fictional · no backend" badge.
-- Everything shown is **fictional** (`data/fixtures/dev-fixtures.js`): an invented studio, invented people and
-  `.example` addresses. No real or financial data.
-- Changes persist **in this browser only** (`localStorage` key `meridian.dev.v1`). To restore the fixtures, open the
-  launcher and run **Reset development data**.
+- **Live backend (`adapters/supabase.js`):** Selected when `app/app-config.json` provides `{ "supabaseUrl": "...", "supabaseAnonKey": "..." }` (or via `node tools/serve.mjs` when local PostgreSQL 17 is installed). Uses GoTrue JWT auth, automatic token refresh, and PostgREST with server-enforced RLS, column grants, and triggers.
+- **Explicit fixture mode (`adapters/fixture.js`):** Selected **only** via `node tools/serve.mjs --fixtures`, `?mode=dev` / `?mode=fixtures`, or `{ "mode": "fixtures" }` in `app/app-config.json`. Everything shown is **fictional** (`data/fixtures/dev-fixtures.js`), persisted in `localStorage` (`meridian.dev.v1`), and never silently replaces a missing or unreachable live backend.
+
+## Live validation (Task Execution slice)
+
+1. **Preflight migration chain (read-only):**
+   `node tools/check-migration-prereqs.mjs` (set `TEST_SUPABASE_URL` and `TEST_SUPABASE_ANON_KEY` to probe a disposable validation project; no service-role key required).
+2. **Apply migrations 1–10** to the designated disposable Supabase validation project (with email confirmation enabled and `max_workspaces = 1` intact) and ensure a confirmed test user exists (`TEST_USER_A_EMAIL` / `TEST_USER_A_PASSWORD`).
+3. **Run the remote integration test:**
+   Set `MERIDIAN_DISPOSABLE_VALIDATION=1`, `TEST_SUPABASE_URL`, `TEST_SUPABASE_ANON_KEY`, `TEST_USER_A_EMAIL`, `TEST_USER_A_PASSWORD` (and optionally `TEST_USER_B_*` if testing two workspaces), then run:
+   `node --test tests/app/task-execution-pg.test.mjs`
+   **Expected:** Task creation, inactive-member rejection (`23514`), invalid/foreign-member rejection (`23503`), simultaneous status + assignee activity logging (`tasks.status_changed` + `tasks.assigned`), server-side `completed_at` on `Done`, and reload persistence all pass.
+4. **Manual browser check:** Serve with `app/app-config.json` pointing to the validation project, sign in, create a task, assign a workspace participant, move `Inbox` -> `In Progress` -> `Done`, verify the Activity section in the task panel, and reload the page to confirm persistence.
 
 ## Structure
 
@@ -126,9 +134,10 @@ app/
   data/
     schema.js                mirror of the Gate 1 tables: columns, enums, CHECKs, grants, FKs, triggers
     repositories.js          the ONLY data API screens use; named after backend tables, views and RPCs
-    adapters/fixture.js      development adapter (in-memory + localStorage)
+    adapters/fixture.js      development adapter (in-memory + localStorage, opt-in only)
+    adapters/supabase.js     live Supabase / PostgREST + GoTrue adapter
     fixtures/dev-fixtures.js fictional seed data, dates relative to business-local today
-    index.js                 selects the adapter (M1: development only)
+    index.js                 fail-closed data source selector (supabase vs explicit fixture mode)
   modules/                   registry, command, projects, tasks, projections (pure), placeholder
   shell/                     sidebar, header, right panel, mobile drawer
   ui/                        icons, components, forms, overlay (menus, dialogs), status vocabulary, launcher, errors
@@ -149,8 +158,7 @@ contract:
 Errors carry the Postgres SQLSTATE (`23514`, `23502`, `23503`, `42501`), so `ui/errors.js` reads the same codes
 from the future Supabase adapter. **`data/schema.js` mirrors the migrations; the migrations are the authority.**
 
-Connecting the backend later means adding `adapters/supabase.js` with the same interface and selecting it in
-`data/index.js`, after the backend gate is authorised. Screens do not change.
+The `supabase.js` adapter implements this exact interface (`select / get / insert / update / remove / rpc / subscribe`) so screens work identically across both backends.
 
 ## Interpretations to review (FO-VIS-CC-001 was not available in the repository)
 
