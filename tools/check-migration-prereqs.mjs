@@ -57,7 +57,7 @@ if (url && anonKey) {
     if (!authRes.ok) process.exit(1);
 
     const colRes = await fetch(`${base}/rest/v1/tasks?select=assigned_to_participant_id&limit=0`, {
-      headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` },
+      headers: { apikey: anonKey },
     });
     if (colRes.status === 200 || colRes.status === 401 || colRes.status === 403) {
       console.log(`INFO tasks.assigned_to_participant_id probe returned HTTP ${colRes.status} (note: 400/42703 indicates migration 10 not yet applied)`);
