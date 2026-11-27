@@ -67,6 +67,11 @@ export function createRepositories(db) {
   const activity = {
     // activity_records is append-only and server-written: no create/update/remove here, by design
     recent: (limit = 20) => db.select('activity_records', { order: [{ col: 'created_at', asc: false }], limit }),
+    forEntity: (entityTable, entityId, limit = 30) => db.select('activity_records', {
+      eq: { entity_table: entityTable, entity_id: entityId },
+      order: [{ col: 'created_at', asc: false }],
+      limit,
+    }),
   };
 
   const contacts = {
