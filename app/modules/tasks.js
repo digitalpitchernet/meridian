@@ -40,13 +40,15 @@ export function priorityButton(ctx, task) {
   return b;
 }
 
-// rows: tasks already filtered; lookups: { projects, milestones, subtasks }
+// rows: tasks already filtered; lookups: { projects, milestones, subtasks, participants? }
 export function taskRows(ctx, tasks, lookups, { showProject = true } = {}) {
   const pmap = new Map(lookups.projects.map(p => [p.id, p]));
+  const amap = new Map((lookups.participants || []).map(p => [p.id, p]));
   const subs = lookups.subtasks || [];
   return tasks.map(t => {
     const st = subs.filter(s => s.task_id === t.id);
     const project = pmap.get(t.project_id);
+    const assignee = amap.get(t.assigned_to_participant_id);
     return h('div', { class: ['row', 'task-row', t.status === 'Done' && 'is-done'], role: 'listitem', dataset: { id: t.id } },
       statusButton(ctx, t),
       h('button', { type: 'button', class: 'row-main', onclick: () => openTaskPanel(ctx, t.id) },
@@ -54,6 +56,7 @@ export function taskRows(ctx, tasks, lookups, { showProject = true } = {}) {
         t.recurrence_rule && h('span', { class: 'row-meta-icon', title: `Repeats ${t.recurrence_rule}` }, icon('refresh', { size: 12 }))),
       h('div', { class: 'row-meta' },
         st.length > 0 && h('span', { class: 'subcount num', title: 'Subtasks done' }, icon('checkSquare', { size: 12 }), `${st.filter(s => s.is_completed).length}/${st.length}`),
+        assignee && h('span', { class: 'proj-tag', title: `Assigned to ${assignee.full_name}` }, assignee.full_name),
         showProject && project && h('a', { class: 'proj-tag', href: `#/projects/${project.id}`, onclick: e => e.stopPropagation() }, project.name),
         t.status !== 'Done' && dueLabel(ctx, t.due_date)),
       priorityButton(ctx, t));
@@ -97,7 +100,13 @@ export async function openTaskPanel(ctx, taskId) {
   const draw = async () => {
     const task = await ctx.data.tasks.get(taskId);
     if (!task) { mount(body, stateBlock('empty', { title: 'This task no longer exists' })); return; }
-    const [projects, subtasks, milestones] = await Promise.all([ctx.data.projects.list(), ctx.data.tasks.subtasks(taskId), task.project_id ? ctx.data.milestones.forProject(task.project_id) : []]);
+    const [projects, subtasks, milestones, participants, activity] = await Promise.all([
+      ctx.data.projects.list(),
+      ctx.data.tasks.subtasks(taskId),
+      task.project_id ? ctx.data.milestones.forProject(task.project_id) : [],
+      ctx.data.workspace.participants(),
+      ctx.data.activity.forEntity('tasks', taskId, 25),
+    ]);
     const set = async (patch, control) => {
       try { await ctx.data.tasks.update(taskId, patch); if (control) setFieldError(control, ''); }
       catch (e) { const f = friendlyError(e); if (control) setFieldError(control, f.message); else ctx.toast(f.message, { tone: 'bad' }); }
@@ -108,6 +117,11 @@ export async function openTaskPanel(ctx, taskId) {
     const statusSel = select(ENUMS.taskStatus, { value: task.status, onchange: e => set({ status: e.target.value }) });
     const prioSel = select(ENUMS.priority, { value: task.priority, onchange: e => set({ priority: e.target.value }) });
     const due = dateInput({ value: task.due_date || '', onchange: e => set({ due_date: nullIfEmpty(e.target.value) }, e.target) });
+    const assigneeOpts = participants
+      .filter(p => p.is_active || p.id === task.assigned_to_participant_id)
+      .map(p => [p.id, p.is_active ? p.full_name : `${p.full_name} (inactive)`]);
+    const assigneeSel = select(assigneeOpts, { value: task.assigned_to_participant_id || '', placeholder: 'Unassigned',
+      onchange: e => set({ assigned_to_participant_id: nullIfEmpty(e.target.value) }, e.target) });
     const projSel = select(projects.filter(p => p.status !== 'Archived' || p.id === task.project_id).map(p => [p.id, p.name]), { value: task.project_id || '', placeholder: 'No project',
       onchange: e => set({ project_id: nullIfEmpty(e.target.value), milestone_id: null }) }); // a milestone belongs to one project
     const msSel = select(milestones.map(m => [m.id, `${m.title} · ${formatShortDate(m.due_date, ctx.today, ctx.profile.date_format)}`]), { value: task.milestone_id || '', placeholder: task.project_id ? 'No milestone' : 'Pick a project first', disabled: !task.project_id,
@@ -131,16 +145,27 @@ export async function openTaskPanel(ctx, taskId) {
     } }, icon('plus', { size: 14, cls: 'icon quick-icon' }), subInput);
 
     // stable keys so focus survives a redraw (field ids are regenerated each time)
-    for (const [k, el] of Object.entries({ title, status: statusSel, priority: prioSel, due, project: projSel, milestone: msSel, repeats: ruleSel, desc, notes, sub: subInput })) el.dataset.key = k;
+    for (const [k, el] of Object.entries({ title, status: statusSel, priority: prioSel, due, assignee: assigneeSel, project: projSel, milestone: msSel, repeats: ruleSel, desc, notes, sub: subInput })) el.dataset.key = k;
     const focusKey = body.contains(document.activeElement) ? document.activeElement.dataset.key : null;
+    const actorMap = new Map(participants.filter(p => p.profile_id).map(p => [p.profile_id, p.full_name]));
+    const actorLabel = a => a.actor_type === 'system' ? 'System' : (actorMap.get(a.actor_id) || (a.actor_id === ctx.profile.id ? ctx.profile.full_name : 'Member'));
     mount(body,
       title,
       h('div', { class: 'prop-grid' },
         field('Status', statusSel), field('Priority', prioSel), field('Due date', due),
-        field('Project', projSel), field('Milestone', msSel), field('Repeats', ruleSel, { hint: task.recurrence_rule ? `Every ${task.recurrence_interval} ${{ daily: 'day', weekly: 'week', monthly: 'month', quarterly: 'quarter', annually: 'year' }[task.recurrence_rule]}${task.recurrence_interval > 1 ? 's' : ''}. Creating the next occurrence is a later server feature.` : null })),
+        field('Assignee', assigneeSel), field('Project', projSel), field('Milestone', msSel),
+        field('Repeats', ruleSel, { hint: task.recurrence_rule ? `Every ${task.recurrence_interval} ${{ daily: 'day', weekly: 'week', monthly: 'month', quarterly: 'quarter', annually: 'year' }[task.recurrence_rule]}${task.recurrence_interval > 1 ? 's' : ''}. Creating the next occurrence is a later server feature.` : null })),
       field('Description', desc, { full: true }),
       h('section', { class: 'panel-section' }, h('h3', { class: 'section-title' }, `Subtasks${subtasks.length ? ` · ${subtasks.filter(s => s.is_completed).length}/${subtasks.length}` : ''}`), subList, addSub),
       field('Notes', notes, { full: true }),
+      h('section', { class: 'panel-section' },
+        h('h3', { class: 'section-title' }, `Activity${activity.length ? ` · ${activity.length}` : ''}`),
+        activity.length
+          ? h('ul', { class: 'activity-list' }, activity.map(a =>
+              h('li', { class: 'activity-item' },
+                h('span', { class: 'activity-summary' }, a.summary),
+                h('span', { class: 'activity-meta' }, `${actorLabel(a)} · ${formatDateTime(a.created_at, ctx.business.timezone, ctx.profile.date_format, ctx.profile.time_format)}`))))
+          : h('p', { class: 'muted', style: { fontSize: '12px', margin: 0 } }, 'No activity recorded yet.')),
       h('dl', { class: 'meta-list' },
         h('dt', null, 'Created'), h('dd', null, formatDateTime(task.created_at, ctx.business.timezone, ctx.profile.date_format, ctx.profile.time_format)),
         h('dt', null, 'Updated'), h('dd', null, formatDateTime(task.updated_at, ctx.business.timezone, ctx.profile.date_format, ctx.profile.time_format)),
@@ -160,7 +185,7 @@ export async function openTaskPanel(ctx, taskId) {
   const later = () => { clearTimeout(timer); timer = setTimeout(() => { if (typing()) { dirty = true; return; } dirty = false; draw(); }, 20); };
   off = ctx.bus.on('data:changed', ch => {
     if (!document.body.contains(body)) { off(); return; }
-    if (['tasks', 'subtasks', 'milestones', 'projects', '*'].includes(ch.table)) later();
+    if (['tasks', 'subtasks', 'milestones', 'projects', 'participants', '*'].includes(ch.table)) later();
   });
   body.addEventListener('focusout', () => { if (dirty) setTimeout(() => { if (dirty && !typing()) { dirty = false; draw(); } }, 0); });
 }
@@ -170,39 +195,48 @@ async function renderTasksPage(ctx, params, query) {
   const view = VIEWS.includes(query.view) ? query.view : 'Open';
   const projectFilter = query.project || '';
   const prioFilter = ENUMS.priority.includes(query.priority) ? query.priority : '';
-  const go = q => ctx.navigate('/tasks', Object.fromEntries(Object.entries({ view, project: projectFilter, priority: prioFilter, ...q }).filter(([k, v]) => v && !(k === 'view' && v === 'Open'))));
+  const assigneeFilter = query.assignee || '';
+  const go = q => ctx.navigate('/tasks', Object.fromEntries(Object.entries({ view, project: projectFilter, priority: prioFilter, assignee: assigneeFilter, ...q }).filter(([k, v]) => v && !(k === 'view' && v === 'Open'))));
 
   const listEl = h('div', { class: 'list-wrap', aria: { live: 'polite' } });
   const tabs = h('div', { class: 'tabs', role: 'tablist', aria: { label: 'Task views' } });
-  const projects = await ctx.data.projects.list();
+  const [projects, initParticipants] = await Promise.all([ctx.data.projects.list(), ctx.data.workspace.participants()]);
   const projSel = select(projects.filter(p => p.status !== 'Archived').map(p => [p.id, p.name]), { value: projectFilter, placeholder: 'All projects', class: 'input select select-sm', aria: { label: 'Filter by project' }, onchange: e => go({ project: e.target.value }) });
   const prioSel = select(ENUMS.priority, { value: prioFilter, placeholder: 'Any priority', class: 'input select select-sm', aria: { label: 'Filter by priority' }, onchange: e => go({ priority: e.target.value }) });
+  const assigneeSel = select([['unassigned', 'Unassigned'], ...initParticipants.filter(p => p.is_active).map(p => [p.id, p.full_name])], { value: assigneeFilter, placeholder: 'All assignees', class: 'input select select-sm', aria: { label: 'Filter by assignee' }, onchange: e => go({ assignee: e.target.value }) });
 
   const draw = async () => {
-    const [tasks, allProjects, milestones, subtasks] = await Promise.all([ctx.data.tasks.list(), ctx.data.projects.list(), ctx.data.milestones.list(), ctx.data.tasks.allSubtasks()]);
-    const filtered = tasks.filter(t => (!projectFilter || t.project_id === projectFilter) && (!prioFilter || t.priority === prioFilter));
+    const [tasks, allProjects, milestones, subtasks, participants] = await Promise.all([ctx.data.tasks.list(), ctx.data.projects.list(), ctx.data.milestones.list(), ctx.data.tasks.allSubtasks(), ctx.data.workspace.participants()]);
+    const filtered = tasks.filter(t =>
+      (!projectFilter || t.project_id === projectFilter) &&
+      (!prioFilter || t.priority === prioFilter) &&
+      (!assigneeFilter || (assigneeFilter === 'unassigned' ? !t.assigned_to_participant_id : t.assigned_to_participant_id === assigneeFilter)));
     const counts = Object.fromEntries(VIEWS.map(v => [v, filtered.filter(t => v === 'Open' ? isOpen(t) : t.status === v).length]));
     mount(tabs, VIEWS.map(v => h('a', { class: ['tab', v === view && 'active'], role: 'tab', aria: { selected: v === view ? 'true' : 'false' },
-      href: `#/tasks?${new URLSearchParams(Object.entries({ view: v === 'Open' ? '' : v, project: projectFilter, priority: prioFilter }).filter(([, x]) => x))}` },
+      href: `#/tasks?${new URLSearchParams(Object.entries({ view: v === 'Open' ? '' : v, project: projectFilter, priority: prioFilter, assignee: assigneeFilter }).filter(([, x]) => x))}` },
       v, h('span', { class: 'tab-count num' }, String(counts[v])))));
-    const lookups = { projects: allProjects, milestones, subtasks };
+    const lookups = { projects: allProjects, milestones, subtasks, participants };
     const visible = sortTasks(filtered.filter(t => view === 'Open' ? isOpen(t) : t.status === view));
     if (view === 'Done') visible.sort((a, b) => (b.completed_at || '').localeCompare(a.completed_at || ''));
     if (!visible.length) {
       mount(listEl, stateBlock('empty', { title: view === 'Open' ? 'Nothing open' : `No tasks in ${view}`,
-        body: projectFilter || prioFilter ? 'No tasks match these filters.' : view === 'Inbox' ? 'Capture anything here; sort it later.' : null }));
+        body: projectFilter || prioFilter || assigneeFilter ? 'No tasks match these filters.' : view === 'Inbox' ? 'Capture anything here; sort it later.' : null }));
       return;
     }
     mount(listEl, view === 'Open' ? groupByStatus(ctx, visible, lookups) : h('div', { class: 'rows', role: 'list' }, taskRows(ctx, visible, lookups)));
   };
   await draw();
   let pending = null;
-  const off = ctx.bus.on('data:changed', ch => { if (['tasks', 'subtasks', 'projects', 'milestones', '*'].includes(ch.table)) { clearTimeout(pending); pending = setTimeout(draw, 30); } });
+  const off = ctx.bus.on('data:changed', ch => { if (['tasks', 'subtasks', 'projects', 'milestones', 'participants', '*'].includes(ch.table)) { clearTimeout(pending); pending = setTimeout(draw, 30); } });
   ctx.onLeave(off);
 
+  const quickDefaults = {
+    ...(projectFilter ? { project_id: projectFilter } : {}),
+    ...(assigneeFilter && assigneeFilter !== 'unassigned' ? { assigned_to_participant_id: assigneeFilter } : {}),
+  };
   const page = h('div', { class: 'page' },
-    pageHeader({ title: 'Tasks', subtitle: 'Everything you have committed to, by state.', actions: [projSel, prioSel] }),
-    quickAdd(ctx, projectFilter ? { project_id: projectFilter } : {}, { placeholder: projectFilter ? 'Add a task to this project’s Inbox' : 'Add a task to Inbox and press Enter' }),
+    pageHeader({ title: 'Tasks', subtitle: 'Everything you have committed to, by state.', actions: [assigneeSel, projSel, prioSel] }),
+    quickAdd(ctx, quickDefaults, { placeholder: projectFilter ? 'Add a task to this project’s Inbox' : 'Add a task to Inbox and press Enter' }),
     tabs, listEl);
   if (params.id) queueMicrotask(() => openTaskPanel(ctx, params.id));
   return page;
