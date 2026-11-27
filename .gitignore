@@ -15,3 +15,4 @@ supabase/.branches/
 # local test scratch (evidence/ is committed on purpose)
 tests/connector/.work/
 tests/recovery/.work/
+.local-pg/

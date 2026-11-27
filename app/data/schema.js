@@ -134,13 +134,13 @@ export const TABLES = {
     guards: {
       beforeInsert(row, q) {
         if (row.assigned_to_participant_id != null) {
-          const p = q.select('participants', { eq: { id: row.assigned_to_participant_id } })[0];
+          const p = q.one('participants', r => r.id === row.assigned_to_participant_id);
           if (p && !p.is_active) throw new DataError('23514', 'cannot assign a task to an inactive workspace member');
         }
       },
       beforeUpdate(old, row, q) {
         if (row.assigned_to_participant_id != null && row.assigned_to_participant_id !== old.assigned_to_participant_id) {
-          const p = q.select('participants', { eq: { id: row.assigned_to_participant_id } })[0];
+          const p = q.one('participants', r => r.id === row.assigned_to_participant_id);
           if (p && !p.is_active) throw new DataError('23514', 'cannot assign a task to an inactive workspace member');
         }
       },
