@@ -47,7 +47,7 @@ export function createShell(ctx) {
       h('div', { class: 'me' }, avatar(ctx.profile.full_name, { size: 26 }),
         h('div', { class: 'me-text', title: `${ctx.profile.full_name} · ${ctx.profile.role_title || 'Founder'}` }, h('span', { class: 'me-name' }, ctx.profile.full_name), h('span', { class: 'me-role' }, ctx.profile.role_title || 'Founder')),
         themeSeg,
-        ctx.signOut && button('', { kind: 'ghost', size: 'sm', iconName: 'logOut', title: 'Sign out', onClick: () => ctx.signOut() }))));
+        ctx.signOut && button('Sign out', { kind: 'ghost', size: 'sm', iconName: 'logOut', cls: 'me-signout', title: 'Sign out', onClick: () => ctx.signOut() }))));
 
   const menuBtn = button('', { kind: 'ghost', iconName: 'menu', title: 'Open navigation', cls: 'menu-btn', onClick: () => setNav(true) });
   const topbar = h('header', { class: 'topbar' },

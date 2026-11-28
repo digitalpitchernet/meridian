@@ -8,7 +8,7 @@ import { field, input, textarea, select, dateInput, setFieldError, nullIfEmpty }
 import { friendlyError } from '../ui/errors.js';
 import { ENUMS } from '../data/schema.js';
 import { formatShortDate, relativeDay, daysBetween, timeAgo } from '../core/format.js';
-import { projectProgress, isOpen, milestoneOpen, milestoneLate, describeActivity, byPriority } from './projections.js';
+import { projectProgress, isOpen, milestoneOpen, milestoneLate, describeActivity, resolveActorName, byPriority } from './projections.js';
 import { taskRows, groupByStatus, quickAdd, sortTasks } from './tasks.js';
 import { openMilestonePanel, milestoneDialog } from './milestones.js';
 import { openContactPanel } from './contacts.js';
@@ -146,11 +146,11 @@ async function renderDetail(ctx, params, _q, _path, setCrumbs) {
     const p = await ctx.data.projects.get(params.id);
     if (!p) { setCrumbs([{ label: 'Not found' }]); mount(root, stateBlock('empty', { title: 'This project doesn’t exist any more', action: h('a', { class: 'link', href: '#/projects' }, 'Back to projects') })); return; }
     setCrumbs([{ label: p.name }]);
-    const [tasks, milestones, projects, subtasks, activity, links, contacts] = await Promise.all([ctx.data.tasks.forProject(p.id), ctx.data.milestones.forProject(p.id), ctx.data.projects.list(), ctx.data.tasks.allSubtasks(), ctx.data.activity.recent(200), ctx.data.contacts.links({ eq: { project_id: p.id } }), ctx.data.contacts.list()]);
+    const [tasks, milestones, projects, subtasks, activity, links, contacts, participants] = await Promise.all([ctx.data.tasks.forProject(p.id), ctx.data.milestones.forProject(p.id), ctx.data.projects.list(), ctx.data.tasks.allSubtasks(), ctx.data.activity.recent(200), ctx.data.contacts.links({ eq: { project_id: p.id } }), ctx.data.contacts.list(), ctx.data.workspace.participants()]);
     const ids = new Set([p.id, ...tasks.map(t => t.id), ...milestones.map(m => m.id)]);
     const related = activity.filter(a => ids.has(a.entity_id)).slice(0, 8);
     const open = sortTasks(tasks.filter(isOpen)), done = tasks.filter(t => !isOpen(t)).sort((a, b) => (b.completed_at || '').localeCompare(a.completed_at || ''));
-    const lookups = { projects, milestones, subtasks };
+    const lookups = { projects, milestones, subtasks, participants };
     mount(root,
       h('header', { class: 'project-head' },
         h('div', { class: 'project-title-row' }, h('h1', { class: 'page-title' }, p.name),
@@ -179,7 +179,12 @@ async function renderDetail(ctx, params, _q, _path, setCrumbs) {
               : h('p', { class: 'faint small' }, 'No contacts linked. Link them from a contact.')),
           h('section', { class: 'side-block' },
             h('h2', { class: 'section-title' }, 'Recent activity'),
-            related.length ? h('ul', { class: 'activity' }, related.map(a => { const d = describeActivity(a); return h('li', null, h('span', null, `${d.verb} ${d.noun} `, h('strong', null, d.label), d.status ? ` → ${d.status}` : ''), h('span', { class: 'faint' }, timeAgo(a.created_at))); }))
+            related.length ? h('ul', { class: 'activity' }, related.map(a => {
+              const d = describeActivity(a);
+              const actor = resolveActorName(a, participants, ctx.profile);
+              const suffix = d.status ? (d.status.startsWith('to ') ? ` ${d.status}` : ` → ${d.status}`) : '';
+              return h('li', null, h('span', null, `${d.verb} ${d.noun} `, h('strong', null, d.label), suffix), h('span', { class: 'faint' }, actor ? `${actor} · ${timeAgo(a.created_at)}` : timeAgo(a.created_at)));
+            }))
               : h('p', { class: 'faint small' }, 'Nothing yet.')))));
   };
   await draw();

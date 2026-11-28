@@ -33,6 +33,13 @@
 .quick-add { position: relative; margin-bottom: var(--space-4); }
 .quick-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
 .quick-input { padding-left: 32px !important; height: 36px; background: var(--surface); }
+.quick-add.has-status .quick-input { padding-right: 112px !important; }
+.quick-status {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px;
+  border-radius: var(--radius-pill); background: var(--surface-2); border: 1px solid var(--border);
+  font-size: var(--text-2xs); font-weight: 500; color: var(--text-2); pointer-events: none;
+}
 
 /* ---------- task rows ---------- */
 .group { margin-bottom: var(--space-5); }

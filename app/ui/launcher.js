@@ -13,20 +13,64 @@ import { score } from '../core/search.js';
 
 export function newTaskDialog(ctx, defaults = {}) {
   return (async () => {
-    const projects = (await ctx.data.projects.list()).filter(p => !['Completed', 'Archived'].includes(p.status));
+    const [allProjects, participants] = await Promise.all([ctx.data.projects.list(), ctx.data.workspace.participants()]);
+    const projects = allProjects.filter(p => !['Completed', 'Archived'].includes(p.status));
+    const activeParticipants = participants.filter(p => p.is_active);
     const title = input({ maxlength: 300, autofocus: true, placeholder: 'What needs doing?' });
     const project = select(projects.map(p => [p.id, p.name]), { value: defaults.project_id || '', placeholder: 'No project' });
-    const status = select(ENUMS.taskStatus.filter(s => s !== 'Done'), { value: 'Inbox' });
-    const priority = select(ENUMS.priority, { value: 'Normal' });
-    const due = dateInput();
-    openDialog({ title: 'New task', content: h('div', { class: 'form-grid' }, field('Title', title, { full: true }), field('Project', project), field('Status', status), field('Priority', priority), field('Due date', due)),
+    const milestone = select([], { value: defaults.milestone_id || '', placeholder: project.value ? 'No milestone' : 'Pick a project first', disabled: !project.value });
+    const assignee = select(activeParticipants.map(p => [p.id, p.full_name]), { value: defaults.assigned_to_participant_id || '', placeholder: 'Unassigned' });
+    const status = select(ENUMS.taskStatus.filter(s => s !== 'Done'), { value: defaults.status && defaults.status !== 'Done' ? defaults.status : 'Inbox' });
+    const priority = select(ENUMS.priority, { value: defaults.priority || 'Normal' });
+    const due = dateInput({ value: defaults.due_date || '' });
+
+    const refreshMilestones = async (pid, keepVal = '') => {
+      if (!pid) {
+        mount(milestone, h('option', { value: '' }, 'Pick a project first'));
+        milestone.value = '';
+        milestone.disabled = true;
+        return;
+      }
+      const ms = await ctx.data.milestones.forProject(pid);
+      mount(milestone, [h('option', { value: '' }, 'No milestone'), ...ms.map(m => h('option', { value: m.id }, m.title))]);
+      milestone.disabled = false;
+      milestone.value = ms.some(m => m.id === keepVal) ? keepVal : '';
+    };
+    project.addEventListener('change', () => refreshMilestones(project.value));
+    if (project.value) await refreshMilestones(project.value, defaults.milestone_id || '');
+
+    const controls = { title, project_id: project, milestone_id: milestone, assigned_to_participant_id: assignee, status, priority, due_date: due };
+    openDialog({
+      title: 'New task',
+      content: h('div', { class: 'form-grid' },
+        field('Title', title, { full: true }),
+        field('Project', project),
+        field('Milestone', milestone),
+        field('Assignee', assignee),
+        field('Status', status),
+        field('Priority', priority),
+        field('Due date', due)),
       actions: [{ label: 'Cancel', kind: 'ghost' }, { label: 'Create task', kind: 'primary', submit: true, run: async () => {
-        setFieldError(title, '');
+        Object.values(controls).forEach(c => setFieldError(c, ''));
         try {
-          const t = await ctx.data.tasks.create({ title: title.value, project_id: nullIfEmpty(project.value), status: status.value, priority: priority.value, due_date: nullIfEmpty(due.value) });
-          ctx.toast(`Task created`, { action: { label: 'Open', run: () => ctx.navigate(`/tasks/${t.id}`) } });
-        } catch (e) { const f = friendlyError(e); setFieldError(f.column === 'due_date' ? due : title, f.message); return false; }
-      } }] });
+          const t = await ctx.data.tasks.create({
+            title: title.value,
+            project_id: nullIfEmpty(project.value),
+            milestone_id: nullIfEmpty(milestone.value),
+            assigned_to_participant_id: nullIfEmpty(assignee.value),
+            status: status.value,
+            priority: priority.value,
+            due_date: nullIfEmpty(due.value),
+          });
+          ctx.toast('Task created', { action: { label: 'Open', run: () => ctx.navigate(`/tasks/${t.id}`) } });
+        } catch (e) {
+          const f = friendlyError(e);
+          const ctrl = controls[f.column] || title;
+          setFieldError(ctrl, f.message);
+          return false;
+        }
+      } }],
+    });
   })();
 }
 

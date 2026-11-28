@@ -89,14 +89,14 @@ export async function openMilestonePanel(ctx, id) {
   const draw = async () => {
     const m = await ctx.data.milestones.get(id);
     if (!m) { mount(body, stateBlock('empty', { title: 'This milestone no longer exists' })); return; }
-    const [project, tasks, projects, subtasks] = await Promise.all([ctx.data.projects.get(m.project_id), ctx.data.tasks.list({ eq: { milestone_id: id } }), ctx.data.projects.list(), ctx.data.tasks.allSubtasks()]);
+    const [project, tasks, projects, subtasks, participants] = await Promise.all([ctx.data.projects.get(m.project_id), ctx.data.tasks.list({ eq: { milestone_id: id } }), ctx.data.projects.list(), ctx.data.tasks.allSubtasks(), ctx.data.workspace.participants()]);
     mount(body,
       h('div', { class: 'ms-head' }, milestoneStatusButton(ctx, m), h('h2', { class: 'ms-title' }, m.title)),
       h('div', { class: 'prop-row' }, whenLabel(ctx, m), project && h('a', { class: 'proj-tag', href: `#/projects/${project.id}` }, project.name), progress(milestoneProgress(id, tasks))),
       m.description && h('p', { class: 'muted' }, m.description),
       h('section', { class: 'panel-section' }, h('h3', { class: 'section-title' }, `Linked tasks · ${tasks.length}`),
         quickAdd(ctx, { project_id: m.project_id, milestone_id: id }, { placeholder: 'Add a task to this milestone' }),
-        tasks.length ? h('div', { class: 'rows', role: 'list' }, taskRows(ctx, sortTasks(tasks), { projects, milestones: [m], subtasks }, { showProject: false }))
+        tasks.length ? h('div', { class: 'rows', role: 'list' }, taskRows(ctx, sortTasks(tasks), { projects, milestones: [m], subtasks, participants }, { showProject: false }))
           : h('p', { class: 'faint small' }, 'No tasks are linked yet.')),
       h('dl', { class: 'meta-list' }, h('dt', null, 'Created'), h('dd', null, formatDateTime(m.created_at, ctx.business.timezone, ctx.profile.date_format, ctx.profile.time_format)),
         m.achieved_at && [h('dt', null, 'Achieved'), h('dd', null, formatDateTime(m.achieved_at, ctx.business.timezone, ctx.profile.date_format, ctx.profile.time_format))]),
