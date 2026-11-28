@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createLocalSupabase, hasLocalPgServer } from '../../tools/local-supabase.mjs';
@@ -9,6 +9,15 @@ import { createSupabaseAdapter } from '../../app/data/adapters/supabase.js';
 import { createRepositories } from '../../app/data/repositories.js';
 
 const REPO_ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+
+// Load local gitignored .env if present (never overwriting explicit process.env values).
+const envPath = join(REPO_ROOT, '.env');
+if (existsSync(envPath)) {
+  for (const line of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+    const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
+    if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].trim();
+  }
+}
 
 const isDisposableRemote = process.env.MERIDIAN_DISPOSABLE_VALIDATION === '1';
 const hasRemoteValidationProject = Boolean(
@@ -125,7 +134,7 @@ test(
       }
       repoB = createRepositories(adapterB);
       let bizB = await adapterB.rpc('get_current_business_id');
-      if (!bizB && useLocal) {
+      if (!bizB) {
         bizB = await adapterB.rpc('create_workspace', {
           p_business_name: 'Beta Validation Labs',
           p_base_currency: 'USD',
