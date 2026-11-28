@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 connector/config.php
+app/app-config.json
 
 # local tooling
 node_modules/
@@ -15,3 +16,4 @@ supabase/.branches/
 # local test scratch (evidence/ is committed on purpose)
 tests/connector/.work/
 tests/recovery/.work/
+.local-pg/

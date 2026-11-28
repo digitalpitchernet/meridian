@@ -1,5 +1,6 @@
 import { FINANCE_TABLES } from './schema-finance.js';
 import { VAULT_TABLES } from './schema-vault.js';
+import { DataError } from './errors.js';
 
 // Mirror of the Gate 1 schema (supabase/migrations, Rev 2.3.4) for the tables the app uses so far.
 // The development adapter enforces these rules so screens are built against the real constraints.
@@ -120,16 +121,30 @@ export const TABLES = {
   },
   tasks: {
     columns: {
-      id, business_id: businessId, project_id: uuid, milestone_id: uuid, title: { ...text, notNull: true, len: [1, 300] }, description: text, notes: text,
+      id, business_id: businessId, project_id: uuid, milestone_id: uuid, assigned_to_participant_id: uuid, title: { ...text, notNull: true, len: [1, 300] }, description: text, notes: text,
       status: { ...text, notNull: true, default: 'Inbox', enum: ENUMS.taskStatus },
       priority: { ...text, notNull: true, default: 'Normal', enum: ENUMS.priority },
       due_date: date, recurrence_rule: { ...text, enum: ENUMS.recurrence }, recurrence_interval: { type: 'int', between: [1, 365] },
       completed_at: { type: 'timestamptz' }, created_at: ts, updated_at: ts,
     },
-    insert: true, update: ['project_id', 'milestone_id', 'title', 'description', 'notes', 'status', 'priority', 'due_date', 'recurrence_rule', 'recurrence_interval'], delete: true,
-    fks: [{ col: 'project_id', ref: 'projects', onDelete: 'set null' }, { col: 'milestone_id', ref: 'milestones', onDelete: 'set null' }],
+    insert: true, update: ['project_id', 'milestone_id', 'assigned_to_participant_id', 'title', 'description', 'notes', 'status', 'priority', 'due_date', 'recurrence_rule', 'recurrence_interval'], delete: true,
+    fks: [{ col: 'project_id', ref: 'projects', onDelete: 'set null' }, { col: 'milestone_id', ref: 'milestones', onDelete: 'set null' }, { col: 'assigned_to_participant_id', ref: 'participants', onDelete: 'set null' }],
     checks: [r => (r.recurrence_rule == null) === (r.recurrence_interval == null) || 'chk_tasks_recurrence'],
     activity: true, sync: 'taskCompletion',
+    guards: {
+      beforeInsert(row, q) {
+        if (row.assigned_to_participant_id != null) {
+          const p = q.one('participants', r => r.id === row.assigned_to_participant_id);
+          if (p && !p.is_active) throw new DataError('23514', 'cannot assign a task to an inactive workspace member');
+        }
+      },
+      beforeUpdate(old, row, q) {
+        if (row.assigned_to_participant_id != null && row.assigned_to_participant_id !== old.assigned_to_participant_id) {
+          const p = q.one('participants', r => r.id === row.assigned_to_participant_id);
+          if (p && !p.is_active) throw new DataError('23514', 'cannot assign a task to an inactive workspace member');
+        }
+      },
+    },
   },
   subtasks: {
     columns: {

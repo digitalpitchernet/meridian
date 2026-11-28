@@ -157,9 +157,33 @@ export function createFixtureAdapter({ seed, session, storage = null, storageKey
     emit({ table: 'activity_records', op: 'insert', row: clone(act) });
   }
   // AFTER record_activity(): event 'table.op', summary 'Table op: label', metadata jsonb_strip_nulls({ status, amount })
-  function recordActivity(table, op, row) {
+  function recordActivity(table, op, row, old = null) {
     const a = spec(table).activity;
     if (!a || (Array.isArray(a) && !a.includes(op))) return;
+    if (table === 'tasks' && op === 'update' && old) {
+      const statusChanged = old.status !== row.status;
+      const assigneeChanged = old.assigned_to_participant_id !== row.assigned_to_participant_id;
+      if (statusChanged) {
+        pushActivity({
+          event_type: row.status === 'Done' ? 'tasks.completed' : 'tasks.status_changed',
+          entity_table: 'tasks',
+          entity_id: row.id,
+          summary: row.status === 'Done' ? `Task completed: ${row.title}` : `Task moved ${old.status} -> ${row.status}: ${row.title}`,
+          metadata: { from_status: old.status, to_status: row.status, status: row.status, ...(row.assigned_to_participant_id ? { assigned_to_participant_id: row.assigned_to_participant_id } : {}) },
+        });
+      }
+      if (assigneeChanged) {
+        const assignee = row.assigned_to_participant_id ? q.one('participants', p => p.id === row.assigned_to_participant_id) : null;
+        pushActivity({
+          event_type: 'tasks.assigned',
+          entity_table: 'tasks',
+          entity_id: row.id,
+          summary: row.assigned_to_participant_id ? `Task assigned to ${assignee?.full_name || 'participant'}: ${row.title}` : `Task unassigned: ${row.title}`,
+          metadata: { ...(old.assigned_to_participant_id ? { from_assignee_id: old.assigned_to_participant_id } : {}), ...(row.assigned_to_participant_id ? { to_assignee_id: row.assigned_to_participant_id } : {}), ...(assignee?.full_name ? { assignee_name: assignee.full_name } : {}), status: row.status },
+        });
+      }
+      if (statusChanged || assigneeChanged) return;
+    }
     const label = row.name ?? row.title ?? row.funder_name ?? row.description ?? row.filename ?? '';
     const metadata = {};
     if (row.status != null) metadata.status = row.status;
@@ -209,7 +233,7 @@ export function createFixtureAdapter({ seed, session, storage = null, storageKey
     validate(table, next, current);
     Object.assign(current, next);
     spec(table).guards?.afterUpdate?.(old, current, q);
-    recordActivity(table, 'update', current);
+    recordActivity(table, 'update', current, old);
     emit({ table, op: 'update', row: clone(current) });
     return clone(current);
   }

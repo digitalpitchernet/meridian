@@ -166,6 +166,10 @@
 .subtask.is-done .input-bare { color: var(--text-3); text-decoration: line-through; }
 .subtask-add { position: relative; }
 .subtask-add .input { padding-left: 32px; height: 30px; }
+.activity-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.activity-item { display: grid; gap: 2px; font-size: var(--text-xs); padding-left: 10px; border-left: 2px solid var(--border); }
+.activity-summary { color: var(--text-1); }
+.activity-meta { color: var(--text-3); }
 .meta-list { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; font-size: var(--text-xs); }
 .meta-list dt { color: var(--text-3); } .meta-list dd { margin: 0; color: var(--text-2); }
 .panel-foot { padding-top: var(--space-2); border-top: 1px solid var(--border); }

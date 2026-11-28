@@ -58,10 +58,10 @@ export function buildFixtures(today) {
   ];
 
   const T = n => fid('t', n);
-  const t = (n, created, x) => base(created, { id: T(n), description: null, notes: null, recurrence_rule: null, recurrence_interval: null, milestone_id: null, completed_at: null, ...x });
+  const t = (n, created, x) => base(created, { id: T(n), description: null, notes: null, recurrence_rule: null, recurrence_interval: null, milestone_id: null, assigned_to_participant_id: null, completed_at: null, ...x });
   const tasks = [
-    t(1, -20, { project_id: P(1), milestone_id: M(2), title: 'Fix sync conflict on task reorder', status: 'In Progress', priority: 'Critical', due_date: d(-2) }),
-    t(2, -18, { project_id: P(1), milestone_id: M(1), title: 'Onboarding call with partner #3', status: 'Next', priority: 'High', due_date: d(0) }),
+    t(1, -20, { project_id: P(1), milestone_id: M(2), assigned_to_participant_id: fid('x', 2), title: 'Fix sync conflict on task reorder', status: 'In Progress', priority: 'Critical', due_date: d(-2) }),
+    t(2, -18, { project_id: P(1), milestone_id: M(1), assigned_to_participant_id: fid('x', 1), title: 'Onboarding call with partner #3', status: 'Next', priority: 'High', due_date: d(0) }),
     t(3, -16, { project_id: P(1), milestone_id: M(1), title: 'Write partner feedback form', status: 'Next', priority: 'Normal', due_date: d(2) }),
     t(4, -15, { project_id: P(1), milestone_id: M(2), title: 'Cut beta release notes', status: 'Waiting', priority: 'Normal', due_date: d(1), notes: 'Waiting on Rohan for the changelog.' }),
     t(5, -14, { project_id: P(1), milestone_id: M(3), title: 'Draft waitlist page copy', status: 'Inbox', priority: 'Normal', due_date: d(12) }),
