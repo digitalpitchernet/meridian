@@ -9,7 +9,7 @@ import { field, input, textarea, select, dateInput, setFieldError, nullIfEmpty }
 import { friendlyError } from '../ui/errors.js';
 import { ENUMS } from '../data/schema.js';
 import { formatShortDate, relativeDay, formatDateTime } from '../core/format.js';
-import { dueState, isOpen, byPriority } from './projections.js';
+import { dueState, isOpen, byPriority, quickAddStatusForView } from './projections.js';
 
 const VIEWS = ['Open', ...ENUMS.taskStatus];
 
@@ -48,7 +48,8 @@ export function taskRows(ctx, tasks, lookups, { showProject = true } = {}) {
   return tasks.map(t => {
     const st = subs.filter(s => s.task_id === t.id);
     const project = pmap.get(t.project_id);
-    const assignee = amap.get(t.assigned_to_participant_id);
+    const assignee = t.assigned_to_participant_id ? amap.get(t.assigned_to_participant_id) : null;
+    const assigneeLabel = assignee ? (assignee.is_active ? assignee.full_name : `${assignee.full_name} (inactive)`) : (t.assigned_to_participant_id ? 'Unknown participant' : null);
     return h('div', { class: ['row', 'task-row', t.status === 'Done' && 'is-done'], role: 'listitem', dataset: { id: t.id } },
       statusButton(ctx, t),
       h('button', { type: 'button', class: 'row-main', onclick: () => openTaskPanel(ctx, t.id) },
@@ -56,21 +57,24 @@ export function taskRows(ctx, tasks, lookups, { showProject = true } = {}) {
         t.recurrence_rule && h('span', { class: 'row-meta-icon', title: `Repeats ${t.recurrence_rule}` }, icon('refresh', { size: 12 }))),
       h('div', { class: 'row-meta' },
         st.length > 0 && h('span', { class: 'subcount num', title: 'Subtasks done' }, icon('checkSquare', { size: 12 }), `${st.filter(s => s.is_completed).length}/${st.length}`),
-        assignee && h('span', { class: 'proj-tag', title: `Assigned to ${assignee.full_name}` }, assignee.full_name),
+        assigneeLabel && h('span', { class: 'proj-tag', title: `Assigned to ${assigneeLabel}` }, assigneeLabel),
         showProject && project && h('a', { class: 'proj-tag', href: `#/projects/${project.id}`, onclick: e => e.stopPropagation() }, project.name),
         t.status !== 'Done' && dueLabel(ctx, t.due_date)),
       priorityButton(ctx, t));
   });
 }
 
-export function quickAdd(ctx, defaults = {}, { placeholder = 'Add a task to Inbox and press Enter' } = {}) {
-  const field_ = input({ placeholder, class: 'input quick-input', aria: { label: placeholder }, maxlength: 300 });
-  const form = h('form', { class: 'quick-add', onsubmit: async e => {
+export function quickAdd(ctx, defaults = {}, { placeholder } = {}) {
+  const targetStatus = defaults.status && defaults.status !== 'Done' ? defaults.status : 'Inbox';
+  const hint = placeholder || `Add a task to ${targetStatus} and press Enter`;
+  const field_ = input({ placeholder: hint, class: 'input quick-input', aria: { label: hint }, maxlength: 300 });
+  const form = h('form', { class: 'quick-add has-status', onsubmit: async e => {
     e.preventDefault();
     const title = field_.value.trim(); if (!title) return;
-    try { await ctx.data.tasks.create({ title, status: 'Inbox', ...defaults }); field_.value = ''; }
+    try { await ctx.data.tasks.create({ ...defaults, title, status: targetStatus }); field_.value = ''; }
     catch (err) { ctx.toast(friendlyError(err).message, { tone: 'bad' }); }
-  } }, icon('plus', { size: 14, cls: 'icon quick-icon' }), field_);
+  } }, icon('plus', { size: 14, cls: 'icon quick-icon' }), field_,
+  h('span', { class: 'quick-status', title: `New tasks will be added to ${targetStatus}` }, statusIcon(TASK_STATUS, targetStatus, 12), targetStatus));
   return form;
 }
 
@@ -230,13 +234,15 @@ async function renderTasksPage(ctx, params, query) {
   const off = ctx.bus.on('data:changed', ch => { if (['tasks', 'subtasks', 'projects', 'milestones', 'participants', '*'].includes(ch.table)) { clearTimeout(pending); pending = setTimeout(draw, 30); } });
   ctx.onLeave(off);
 
+  const quickStatus = quickAddStatusForView(view);
   const quickDefaults = {
+    status: quickStatus,
     ...(projectFilter ? { project_id: projectFilter } : {}),
     ...(assigneeFilter && assigneeFilter !== 'unassigned' ? { assigned_to_participant_id: assigneeFilter } : {}),
   };
   const page = h('div', { class: 'page' },
     pageHeader({ title: 'Tasks', subtitle: 'Everything you have committed to, by state.', actions: [assigneeSel, projSel, prioSel] }),
-    quickAdd(ctx, quickDefaults, { placeholder: projectFilter ? 'Add a task to this project’s Inbox' : 'Add a task to Inbox and press Enter' }),
+    quickAdd(ctx, quickDefaults, { placeholder: projectFilter ? `Add a task to this project’s ${quickStatus}` : `Add a task to ${quickStatus} and press Enter` }),
     tabs, listEl);
   if (params.id) queueMicrotask(() => openTaskPanel(ctx, params.id));
   return page;

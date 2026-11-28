@@ -7,7 +7,7 @@ import { icon } from '../ui/icons.js';
 import { button, stateBlock } from '../ui/components.js';
 import { TASK_STATUS, MILESTONE_STATUS, statusIcon, priorityIcon } from '../ui/status.js';
 import { formatShortDate, relativeDay, formatTime, timeAgo, addDays, daysBetween, formatCount } from '../core/format.js';
-import { kpis, attention, activeProjects, schedule, describeActivity, cashBreakdown } from './projections.js';
+import { kpis, attention, activeProjects, schedule, describeActivity, resolveActorName, cashBreakdown } from './projections.js';
 import { statusButton, dueLabel, openTaskPanel } from './tasks.js';
 import { financeSnapshot } from './reporting.js';
 import { fmt, bar } from './finance-ui.js';
@@ -22,13 +22,20 @@ const LINK = { attention: ['#/tasks', 'All tasks'], projects: ['#/projects', 'Al
 
 async function loadAll(ctx) {
   const today = ctx.today;
-  const [tasks, projects, milestones, events, activity, decisions] = await Promise.all([
+  const [tasks, projects, milestones, events, activity, decisions, participants] = await Promise.all([
     ctx.data.tasks.list(), ctx.data.projects.list(), ctx.data.milestones.list(),
     ctx.data.calendar.between(new Date(`${today}T00:00:00Z`).toISOString(), new Date(`${addDays(today, 16)}T00:00:00Z`).toISOString()),
-    ctx.data.activity.recent(8), ctx.data.decisions.list()]);
+    ctx.data.activity.recent(8), ctx.data.decisions.list(), ctx.data.workspace.participants()]);
   // finance failures must not take the other panels down: they render their own error state
   const finance = await financeSnapshot(ctx.data, today).catch(e => { console.error(e); return null; });
-  return { today, tasks, projects, milestones, events, activity, decisions, finance };
+  return { today, tasks, projects, milestones, events, activity, decisions, participants, finance };
+}
+
+function participantLabel(participants, id) {
+  if (!id) return null;
+  const p = (participants || []).find(x => x.id === id);
+  if (!p) return 'Unknown participant';
+  return p.is_active ? p.full_name : `${p.full_name} (inactive)`;
 }
 
 function panel(id, body, { meta } = {}) {
@@ -135,9 +142,10 @@ function attentionList(ctx, d) {
         h('span', { class: 'att-when fg-bad num' }, it.days ? `${it.days}d late` : 'due today'), statusIcon(MILESTONE_STATUS, m.status, 14));
     }
     const t = it.task;
+    const assignee = participantLabel(d.participants, t.assigned_to_participant_id);
     return h('div', { class: ['att-row', `sev-${sev(it)}`] }, statusButton(ctx, t),
       h('button', { type: 'button', class: 'att-main', onclick: () => openTaskPanel(ctx, t.id) },
-        h('span', { class: 'att-title' }, t.title), h('span', { class: 'att-sub' }, [it.kind === 'critical' ? 'Critical · no due date' : t.status, it.project].filter(Boolean).join(' · '))),
+        h('span', { class: 'att-title' }, t.title), h('span', { class: 'att-sub' }, [it.kind === 'critical' ? 'Critical · no due date' : t.status, it.project, assignee].filter(Boolean).join(' · '))),
       it.kind === 'critical' ? h('span', { class: 'att-when fg-bad' }, 'set a date') : dueLabel(ctx, t.due_date), priorityIcon(t.priority, 14));
   });
   return [h('div', { class: 'att-summary' },
@@ -228,8 +236,10 @@ function scheduleList(ctx, d) {
         h('a', { class: 'agenda-title', href: `#/decisions/${it.decision.id}` }, it.decision.title), h('span', { class: 'agenda-sub' }, `Decision${it.project ? ` · ${it.project}` : ''}`));
       if (it.kind === 'milestone') return h('li', { class: 'agenda-item' }, h('span', { class: 'agenda-time faint' }, 'Due'), h('span', { class: 'agenda-dot dot-milestone' }),
         h('a', { class: 'agenda-title', href: `#/projects/${it.milestone.project_id}` }, it.milestone.title), h('span', { class: 'agenda-sub' }, `Milestone · ${it.project ?? ''}`));
+      const assignee = participantLabel(d.participants, it.task.assigned_to_participant_id);
+      const sub = [it.project, assignee].filter(Boolean).join(' · ');
       return h('li', { class: 'agenda-item' }, h('span', { class: 'agenda-time faint' }, 'Due'), statusIcon(TASK_STATUS, it.task.status, 13),
-        h('button', { type: 'button', class: 'agenda-title as-link', onclick: () => openTaskPanel(ctx, it.task.id) }, it.task.title), it.project && h('span', { class: 'agenda-sub' }, it.project));
+        h('button', { type: 'button', class: 'agenda-title as-link', onclick: () => openTaskPanel(ctx, it.task.id) }, it.task.title), sub && h('span', { class: 'agenda-sub' }, sub));
     })))))];
 }
 
@@ -237,9 +247,10 @@ function activityList(ctx, d) {
   if (!d.activity.length) return stateBlock('empty', { title: 'No activity yet' });
   return h('ul', { class: 'cc-activity' }, d.activity.map(a => {
     const x = describeActivity(a);
+    const actor = resolveActorName(a, d.participants, ctx.profile);
     const href = { projects: `#/projects/${a.entity_id}`, tasks: `#/tasks/${a.entity_id}`, milestones: `#/milestones/${a.entity_id}`, decisions: `#/decisions/${a.entity_id}` }[a.entity_table] ?? null;
-    return h('li', null, h('span', { class: 'act-text' }, `${x.verb} ${x.noun} `, href && x.verb !== 'Deleted' ? h('a', { href }, x.label) : h('strong', null, x.label), x.status ? h('span', { class: 'faint' }, ` → ${x.status}`) : null),
-      h('span', { class: 'act-time faint' }, timeAgo(a.created_at)));
+    return h('li', null, h('span', { class: 'act-text' }, `${x.verb} ${x.noun} `, href && x.verb !== 'Deleted' ? h('a', { href }, x.label) : h('strong', null, x.label), x.status ? h('span', { class: 'faint' }, ` ${x.status.startsWith('to ') ? x.status : `→ ${x.status}`}`) : null),
+      h('span', { class: 'act-time faint' }, actor ? `${actor} · ${timeAgo(a.created_at)}` : timeAgo(a.created_at)));
   }));
 }
 

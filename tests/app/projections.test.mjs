@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { kpis, attention, activeProjects, schedule, dueState, projectProgress, describeActivity, milestoneLate } from '../../app/modules/projections.js';
+import { kpis, attention, activeProjects, schedule, dueState, projectProgress, describeActivity, resolveActorName, milestoneLate } from '../../app/modules/projections.js';
 import { buildFixtures } from '../../app/data/fixtures/dev-fixtures.js';
 
 const TODAY = '2026-11-08';
@@ -66,8 +66,32 @@ test('schedule: next 14 days grouped by business-local date; all-day events and 
   assert.ok(all.every(i => i.kind !== 'task' || i.task.status !== 'Done'));
 });
 
-test('describeActivity phrases trigger rows', () => {
+test('describeActivity phrases trigger rows and Migration 10 task events', () => {
   assert.deepEqual(describeActivity({ event_type: 'tasks.update', summary: 'Tasks update: Ship it', metadata: { status: 'Done' } }), { verb: 'Completed', noun: 'task', label: 'Ship it', status: null });
   assert.deepEqual(describeActivity({ event_type: 'projects.update', summary: 'Projects update: Launch', metadata: { status: 'On Hold' } }), { verb: 'Updated', noun: 'project', label: 'Launch', status: 'On Hold' });
   assert.deepEqual(describeActivity({ event_type: 'milestones.insert', summary: 'Milestones insert', metadata: {} }), { verb: 'Created', noun: 'milestone', label: '', status: null });
+  assert.deepEqual(
+    describeActivity({ event_type: 'tasks.status_changed', summary: 'Task moved Inbox -> In Progress: Ship it', metadata: { from_status: 'Inbox', to_status: 'In Progress' } }),
+    { verb: 'Moved', noun: 'task', label: 'Ship it', status: 'Inbox → In Progress' },
+  );
+  assert.deepEqual(
+    describeActivity({ event_type: 'tasks.assigned', summary: 'Task assigned to Rohan Mehra: Ship it', metadata: { to_assignee_id: 'p1', assignee_name: 'Rohan Mehra' } }),
+    { verb: 'Assigned', noun: 'task', label: 'Ship it', status: 'to Rohan Mehra' },
+  );
+  assert.deepEqual(
+    describeActivity({ event_type: 'tasks.assigned', summary: 'Task unassigned: Ship it', metadata: {} }),
+    { verb: 'Unassigned', noun: 'task', label: 'Ship it', status: null },
+  );
+  assert.deepEqual(
+    describeActivity({ event_type: 'tasks.completed', summary: 'Task completed: Ship it', metadata: { from_status: 'In Progress', to_status: 'Done' } }),
+    { verb: 'Completed', noun: 'task', label: 'Ship it', status: null },
+  );
+});
+
+test('resolveActorName resolves known actors and never invents names', () => {
+  const participants = [{ profile_id: 'u1', full_name: 'Asha Varma' }];
+  assert.equal(resolveActorName({ actor_type: 'user', actor_id: 'u1' }, participants), 'Asha Varma');
+  assert.equal(resolveActorName({ actor_type: 'user', actor_id: 'u2' }, participants, { id: 'u2', full_name: 'Ben Carter' }), 'Ben Carter');
+  assert.equal(resolveActorName({ actor_type: 'user', actor_id: 'u-unknown' }, participants), null);
+  assert.equal(resolveActorName({ actor_type: 'system', actor_id: null }, participants), 'System');
 });

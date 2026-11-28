@@ -9,6 +9,7 @@ import { resolveDataConfig } from '../../app/data/index.js';
 import { buildFixtures, DEV_BUSINESS_ID, DEV_PROFILE_ID } from '../../app/data/fixtures/dev-fixtures.js';
 import { createRepositories } from '../../app/data/repositories.js';
 import { todayIn } from '../../app/core/format.js';
+import { quickAddStatusForView } from '../../app/modules/projections.js';
 
 const REPO_ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
@@ -218,4 +219,25 @@ test('migration 10 static safety check: aligns with tenancy, column grants, sear
   assert.match(m10, /REVOKE ALL ON FUNCTION public\.guard_task_assignee\(\) FROM PUBLIC, anon, authenticated/i);
   assert.match(m10, /REVOKE ALL ON FUNCTION public\.record_task_activity\(\) FROM PUBLIC, anon, authenticated/i);
   assert.doesNotMatch(m10, /ELSIF\s+OLD\.assigned_to_participant_id\s+IS\s+DISTINCT\s+FROM/i, 'status and assignee activity must be independent IF blocks');
+});
+
+test('context-aware quickAddStatusForView maps tabs predictably', () => {
+  assert.equal(quickAddStatusForView('Open'), 'Inbox');
+  assert.equal(quickAddStatusForView('Done'), 'Inbox');
+  assert.equal(quickAddStatusForView('Inbox'), 'Inbox');
+  assert.equal(quickAddStatusForView('Next'), 'Next');
+  assert.equal(quickAddStatusForView('In Progress'), 'In Progress');
+  assert.equal(quickAddStatusForView('Waiting'), 'Waiting');
+});
+
+test('task continuity wiring: projects, milestones, and launcher include participant lookups and controls', () => {
+  const projSrc = readFileSync(resolve(REPO_ROOT, 'app', 'modules', 'projects.js'), 'utf8');
+  const msSrc = readFileSync(resolve(REPO_ROOT, 'app', 'modules', 'milestones.js'), 'utf8');
+  const launcherSrc = readFileSync(resolve(REPO_ROOT, 'app', 'ui', 'launcher.js'), 'utf8');
+  const shellCss = readFileSync(resolve(REPO_ROOT, 'app', 'styles', 'shell.css'), 'utf8');
+  assert.match(projSrc, /lookups\s*=\s*\{[^}]*participants/);
+  assert.match(msSrc, /taskRows\([\s\S]*?participants/);
+  assert.match(launcherSrc, /assigned_to_participant_id:\s*nullIfEmpty\(assignee\.value\)/);
+  assert.match(launcherSrc, /milestone_id:\s*nullIfEmpty\(milestone\.value\)/);
+  assert.match(shellCss, /\.me-signout\s*\{[^}]*margin-left:\s*auto/);
 });

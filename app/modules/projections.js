@@ -6,6 +6,7 @@ import { toCents } from '../data/money.js';
 const PRIORITY_RANK = { Critical: 0, High: 1, Normal: 2, Low: 3 };
 export const isOpen = t => t.status !== 'Done';
 export const byPriority = (a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+export const quickAddStatusForView = view => (['Inbox', 'Next', 'In Progress', 'Waiting'].includes(view) ? view : 'Inbox');
 
 export function dueState(dateStr, today) {
   if (!dateStr) return null;
@@ -81,13 +82,32 @@ export function schedule({ events, tasks, milestones, projects, decisions = [] }
     .map(([date, items]) => ({ date, items: items.sort((a, b) => String(a.sort).localeCompare(String(b.sort))) }));
 }
 
-// Human phrasing for activity_records written by record_activity(): '<table>.<op>' plus metadata.status
+// Human phrasing for activity_records written by record_activity() / record_task_activity()
 export function describeActivity(a) {
   const [table, op] = a.event_type.split('.');
   const noun = { projects: 'project', tasks: 'task', milestones: 'milestone', decisions: 'decision' }[table] || table;
   const label = a.summary.includes(': ') ? a.summary.slice(a.summary.indexOf(': ') + 2) : '';
+  if (op === 'completed') return { verb: 'Completed', noun, label, status: null };
+  if (op === 'status_changed') {
+    const from = a.metadata?.from_status, to = a.metadata?.to_status || a.metadata?.status;
+    return { verb: 'Moved', noun, label, status: from && to ? `${from} → ${to}` : (to || null) };
+  }
+  if (op === 'assigned') {
+    const toId = a.metadata?.to_assignee_id;
+    if (!toId && !a.metadata?.assignee_name) return { verb: 'Unassigned', noun, label, status: null };
+    return { verb: 'Assigned', noun, label, status: a.metadata?.assignee_name ? `to ${a.metadata.assignee_name}` : 'to participant' };
+  }
   const verb = op === 'insert' ? 'Created' : op === 'delete' ? 'Deleted' : a.metadata?.status === 'Done' && table === 'tasks' ? 'Completed' : 'Updated';
   return { verb, noun, label, status: op === 'update' && a.metadata?.status && !(table === 'tasks' && a.metadata.status === 'Done') ? a.metadata.status : null };
+}
+
+export function resolveActorName(a, participants = [], profile = null) {
+  if (a.actor_type === 'system') return 'System';
+  if (!a.actor_id) return null;
+  const p = participants.find(x => x.profile_id === a.actor_id);
+  if (p) return p.full_name;
+  if (profile && profile.id === a.actor_id) return profile.full_name;
+  return null;
 }
 
 // ---------- M2: milestones and calendar ----------
